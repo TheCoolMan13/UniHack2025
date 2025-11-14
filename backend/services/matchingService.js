@@ -4,6 +4,7 @@
  * Uses real route calculation from Google Maps Directions API for accurate matching
  */
 const routeService = require('./routeService');
+const polyline = require('@mapbox/polyline');
 
 /**
  * Calculate distance between two coordinates (Haversine formula)
@@ -91,8 +92,115 @@ const isDayMatch = (days1, days2) => {
 };
 
 /**
+ * Check if pickup comes before dropoff along the driver's route
+ * Uses route polyline to determine point positions
+ * @param {Object} pickupPoint - Passenger pickup location
+ * @param {Object} dropoffPoint - Passenger dropoff location
+ * @param {Object} routeStart - Driver route start
+ * @param {Object} routeEnd - Driver route end
+ * @returns {Promise<Object>} - {isValidOrder, pickupPosition, dropoffPosition, pickupDistance, dropoffDistance}
+ */
+const checkRouteOrder = async (pickupPoint, dropoffPoint, routeStart, routeEnd) => {
+  try {
+    // Get the driver's route
+    const driverRoute = await routeService.getRoute(routeStart, routeEnd);
+    const decoded = polyline.decode(driverRoute.polyline);
+
+    // Find closest points on route for pickup and dropoff
+    let pickupMinDistance = Infinity;
+    let dropoffMinDistance = Infinity;
+    let pickupIndex = -1;
+    let dropoffIndex = -1;
+
+    for (let i = 0; i < decoded.length; i++) {
+      const routePoint = { latitude: decoded[i][0], longitude: decoded[i][1] };
+      
+      // Calculate distance from pickup to this route point
+      const pickupDist = calculateDistance(
+        pickupPoint.latitude,
+        pickupPoint.longitude,
+        routePoint.latitude,
+        routePoint.longitude
+      );
+      
+      // Calculate distance from dropoff to this route point
+      const dropoffDist = calculateDistance(
+        dropoffPoint.latitude,
+        dropoffPoint.longitude,
+        routePoint.latitude,
+        routePoint.longitude
+      );
+
+      if (pickupDist < pickupMinDistance) {
+        pickupMinDistance = pickupDist;
+        pickupIndex = i;
+      }
+
+      if (dropoffDist < dropoffMinDistance) {
+        dropoffMinDistance = dropoffDist;
+        dropoffIndex = i;
+      }
+    }
+
+    // Check if pickup comes before dropoff along the route
+    const isValidOrder = pickupIndex < dropoffIndex;
+    
+    // Calculate distances using routeService for accuracy
+    const pickupCheck = await routeService.isPointOnRoute(
+      pickupPoint,
+      routeStart,
+      routeEnd,
+      5 // 5km threshold for order checking
+    );
+    
+    const dropoffCheck = await routeService.isPointOnRoute(
+      dropoffPoint,
+      routeStart,
+      routeEnd,
+      5
+    );
+
+    return {
+      isValidOrder,
+      pickupPosition: pickupIndex,
+      dropoffPosition: dropoffIndex,
+      pickupDistance: pickupCheck.distance,
+      dropoffDistance: dropoffCheck.distance,
+      pickupOnRoute: pickupCheck.isOnRoute,
+      dropoffOnRoute: dropoffCheck.isOnRoute,
+    };
+  } catch (error) {
+    console.error('Error checking route order:', error);
+    // Fallback: use simple distance check
+    const pickupDist = calculateDistance(
+      pickupPoint.latitude,
+      pickupPoint.longitude,
+      routeStart.latitude,
+      routeStart.longitude
+    );
+    const dropoffDist = calculateDistance(
+      dropoffPoint.latitude,
+      dropoffPoint.longitude,
+      routeStart.latitude,
+      routeStart.longitude
+    );
+    
+    // Simple heuristic: if dropoff is further from start than pickup, assume valid order
+    return {
+      isValidOrder: dropoffDist > pickupDist,
+      pickupPosition: -1,
+      dropoffPosition: -1,
+      pickupDistance: pickupDist,
+      dropoffDistance: dropoffDist,
+      pickupOnRoute: false,
+      dropoffOnRoute: false,
+    };
+  }
+};
+
+/**
  * Match passenger route with driver routes using real route calculation
- * Uses a hybrid approach: quick filtering first, then real route checks for accuracy
+ * Enhanced version that checks route order and calculates recommended routes
  */
 const findMatchingRides = async (passengerRoute, driverRoutes) => {
   const matches = [];
@@ -128,27 +236,54 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
       let dropoffOnRoute = false;
       let pickupDistance = Infinity;
       let dropoffDistance = Infinity;
+      let isValidOrder = false;
+      let recommendedRoute = null;
+      let detourDistance = 0;
+      let detourDuration = 0;
+      let originalRouteDistance = 0;
+      let originalRouteDuration = 0;
 
       if (USE_REAL_ROUTES) {
-        // Use real route calculation for accurate matching
-        const pickupCheck = await routeService.isPointOnRoute(
-          passengerRoute.pickupLocation,
+        // Get driver's original route for comparison
+        const originalRoute = await routeService.getRoute(
           driverRoute.pickupLocation,
-          driverRoute.dropoffLocation,
-          2 // 2km threshold
+          driverRoute.dropoffLocation
         );
+        originalRouteDistance = originalRoute.distance;
+        originalRouteDuration = originalRoute.duration;
 
-        const dropoffCheck = await routeService.isPointOnRoute(
+        // Check route order and point positions
+        const orderCheck = await checkRouteOrder(
+          passengerRoute.pickupLocation,
           passengerRoute.dropoffLocation,
           driverRoute.pickupLocation,
-          driverRoute.dropoffLocation,
-          2
+          driverRoute.dropoffLocation
         );
 
-        pickupOnRoute = pickupCheck.isOnRoute;
-        dropoffOnRoute = dropoffCheck.isOnRoute;
-        pickupDistance = pickupCheck.distance;
-        dropoffDistance = dropoffCheck.distance;
+        isValidOrder = orderCheck.isValidOrder;
+        pickupOnRoute = orderCheck.pickupOnRoute;
+        dropoffOnRoute = orderCheck.dropoffOnRoute;
+        pickupDistance = orderCheck.pickupDistance;
+        dropoffDistance = orderCheck.dropoffDistance;
+
+        // Only calculate recommended route if order is valid or both points are on route
+        if (isValidOrder || (pickupOnRoute && dropoffOnRoute)) {
+          try {
+            // Calculate route: Driver Origin → Passenger Pickup → Passenger Dropoff → Driver Destination
+            recommendedRoute = await routeService.getRouteWithWaypoints(
+              driverRoute.pickupLocation,
+              [passengerRoute.pickupLocation, passengerRoute.dropoffLocation],
+              driverRoute.dropoffLocation
+            );
+
+            // Calculate detour (extra distance/time)
+            detourDistance = recommendedRoute.distance - originalRouteDistance;
+            detourDuration = recommendedRoute.duration - originalRouteDuration;
+          } catch (routeError) {
+            console.error(`Error calculating recommended route for driver ${driverRoute.id}:`, routeError);
+            // Continue without recommended route
+          }
+        }
       } else {
         // Fallback to simple calculation if real routes disabled
         pickupOnRoute = isPointOnRoute(
@@ -173,6 +308,21 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
           driverRoute.pickupLocation,
           driverRoute.dropoffLocation
         );
+        
+        // Simple order check: dropoff should be further from start
+        const pickupFromStart = calculateDistance(
+          passengerRoute.pickupLocation.latitude,
+          passengerRoute.pickupLocation.longitude,
+          driverRoute.pickupLocation.latitude,
+          driverRoute.pickupLocation.longitude
+        );
+        const dropoffFromStart = calculateDistance(
+          passengerRoute.dropoffLocation.latitude,
+          passengerRoute.dropoffLocation.longitude,
+          driverRoute.pickupLocation.latitude,
+          driverRoute.pickupLocation.longitude
+        );
+        isValidOrder = dropoffFromStart > pickupFromStart;
       }
 
       // Check time match
@@ -187,44 +337,141 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         driverRoute.schedule.days
       );
 
-      // Calculate match score
-      if (pickupOnRoute) {
-        matchScore += 30;
+      // Calculate match score with improved logic
+      if (pickupOnRoute && dropoffOnRoute && isValidOrder) {
+        matchScore += 40; // Perfect match: both on route and correct order
+        reasons.push('Perfect route alignment');
+      } else if (pickupOnRoute && dropoffOnRoute) {
+        matchScore += 30; // Both on route but order might be wrong
+        reasons.push('Both points on route');
+        if (!isValidOrder) {
+          reasons.push('⚠️ Route order may be incorrect');
+        }
+      } else if (pickupOnRoute) {
+        matchScore += 20;
         reasons.push('Pickup on route');
-      } else if (pickupDistance < 5) {
-        // Close but not exactly on route
-        matchScore += 15;
-        reasons.push(`Pickup near route (${pickupDistance.toFixed(1)}km)`);
-      }
-
-      if (dropoffOnRoute) {
-        matchScore += 30;
+        if (dropoffDistance < 5) {
+          matchScore += 10;
+          reasons.push(`Dropoff near route (${dropoffDistance.toFixed(1)}km)`);
+        }
+      } else if (dropoffOnRoute) {
+        matchScore += 20;
         reasons.push('Dropoff on route');
-      } else if (dropoffDistance < 5) {
-        // Close but not exactly on route
-        matchScore += 15;
-        reasons.push(`Dropoff near route (${dropoffDistance.toFixed(1)}km)`);
+        if (pickupDistance < 5) {
+          matchScore += 10;
+          reasons.push(`Pickup near route (${pickupDistance.toFixed(1)}km)`);
+        }
+      } else {
+        // Both points near route
+        if (pickupDistance < 5 && dropoffDistance < 5) {
+          matchScore += 20;
+          reasons.push(`Both points near route (pickup: ${pickupDistance.toFixed(1)}km, dropoff: ${dropoffDistance.toFixed(1)}km)`);
+        } else if (pickupDistance < 5) {
+          matchScore += 10;
+          reasons.push(`Pickup near route (${pickupDistance.toFixed(1)}km)`);
+        } else if (dropoffDistance < 5) {
+          matchScore += 10;
+          reasons.push(`Dropoff near route (${dropoffDistance.toFixed(1)}km)`);
+        }
       }
 
+      // Penalize invalid order
+      if (!isValidOrder && (pickupOnRoute || dropoffOnRoute)) {
+        matchScore -= 15;
+        reasons.push('⚠️ Route order may require backtracking');
+      }
+
+      // Time matching
       if (timeMatch) {
         matchScore += 25;
         reasons.push('Time matches');
+      } else {
+        // Partial time match (within 1 hour)
+        const timeDiff = Math.abs(
+          parseTime(passengerRoute.schedule.time) - parseTime(driverRoute.schedule.time)
+        );
+        if (timeDiff <= 60) {
+          matchScore += 10;
+          reasons.push('Time close');
+        }
       }
 
+      // Day matching
       if (dayMatch) {
         matchScore += 15;
         reasons.push('Days match');
       }
 
+      // Detour penalty (smaller detour = better match)
+      if (detourDistance > 0) {
+        if (detourDistance < 2) {
+          matchScore += 5; // Small detour is good
+          reasons.push(`Minimal detour (+${detourDistance.toFixed(1)}km)`);
+        } else if (detourDistance < 5) {
+          // Neutral
+        } else {
+          matchScore -= 5; // Large detour penalty
+          reasons.push(`Large detour (+${detourDistance.toFixed(1)}km)`);
+        }
+      }
+
       // Only include if there's a meaningful match
       if (matchScore >= 30) {
-        matches.push({
+        const match = {
           ...driverRoute,
           matchScore,
           reasons,
           pickupDistance: pickupDistance < Infinity ? pickupDistance : null,
           dropoffDistance: dropoffDistance < Infinity ? dropoffDistance : null,
-        });
+          isValidOrder,
+        };
+
+        // Add route information if available
+        if (recommendedRoute) {
+          // Enhance legs with descriptive information
+          const enhancedLegs = (recommendedRoute.legs || []).map((leg, index) => {
+            let fromLabel, toLabel;
+            if (index === 0) {
+              fromLabel = 'Driver Origin';
+              toLabel = 'Passenger Pickup';
+            } else if (index === 1) {
+              fromLabel = 'Passenger Pickup';
+              toLabel = 'Passenger Dropoff';
+            } else {
+              fromLabel = 'Passenger Dropoff';
+              toLabel = 'Driver Destination';
+            }
+            
+            return {
+              ...leg,
+              from: fromLabel,
+              to: toLabel,
+              distance: leg.distance,
+              duration: leg.duration,
+              startLocation: leg.startLocation,
+              endLocation: leg.endLocation,
+            };
+          });
+
+          match.recommendedRoute = {
+            distance: recommendedRoute.distance,
+            duration: recommendedRoute.duration,
+            distanceText: `${recommendedRoute.distance.toFixed(1)} km`,
+            durationText: `${Math.round(recommendedRoute.duration)} min`,
+            polyline: recommendedRoute.polyline,
+            legs: enhancedLegs,
+          };
+          match.detourDistance = Math.round(detourDistance * 10) / 10; // Round to 1 decimal
+          match.detourDuration = Math.round(detourDuration);
+          match.originalRoute = {
+            distance: originalRouteDistance,
+            duration: originalRouteDuration,
+            distanceText: `${originalRouteDistance.toFixed(1)} km`,
+            durationText: `${Math.round(originalRouteDuration)} min`,
+          };
+        }
+
+        matches.push(match);
       }
     } catch (error) {
       console.error(`Error matching route for driver ${driverRoute.id}:`, error);
@@ -284,6 +531,18 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
 
   // Sort by match score (highest first)
   return matches.sort((a, b) => b.matchScore - a.matchScore);
+};
+
+/**
+ * Helper function to parse time string to minutes
+ */
+const parseTime = (timeStr) => {
+  const [time, period] = timeStr.split(' ');
+  const [hours, minutes] = time.split(':').map(Number);
+  let totalMinutes = hours * 60 + minutes;
+  if (period === 'PM' && hours !== 12) totalMinutes += 12 * 60;
+  if (period === 'AM' && hours === 12) totalMinutes -= 12 * 60;
+  return totalMinutes;
 };
 
 module.exports = {

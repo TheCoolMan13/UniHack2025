@@ -14,10 +14,21 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:8081',
-  credentials: true
-}));
+// CORS configuration - allow all origins in development for easier testing
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(null, true); // In development, allow all origins
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -57,9 +68,13 @@ const startServer = async () => {
     await db.getConnection();
     console.log('✅ Database connected successfully');
 
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🌐 Server accessible at:`);
+      console.log(`   - http://localhost:${PORT}`);
+      console.log(`   - http://10.113.209.10:${PORT}`);
+      console.log(`   - http://192.168.56.1:${PORT}`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

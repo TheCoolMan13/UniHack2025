@@ -13,7 +13,7 @@ export const API_CONFIG = {
   // For iOS simulator, use: 'http://localhost:3000/api'
   // For physical device, use your computer's IP: 'http://YOUR_IP:3000/api'
   BASE_URL: typeof __DEV__ !== 'undefined' && __DEV__
-    ? 'http://localhost:3000/api' // Development - change to your IP for physical devices
+    ? 'http://10.113.209.10:3000/api' // Development - using your computer's IP address
     : 'https://api.yourapp.com/api', // Production
 
   TIMEOUT: 10000, // 10 seconds

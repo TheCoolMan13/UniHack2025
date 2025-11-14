@@ -35,9 +35,7 @@ const HomeStack = () => {
                 component={PostRideScreen}
                 options={{
                     presentation: "modal",
-                    headerShown: true,
-                    headerStyle: { backgroundColor: Colors.backgroundLight },
-                    headerTitleStyle: { color: Colors.textPrimary },
+                    headerShown: false,
                 }}
             />
             <Stack.Screen
@@ -45,9 +43,7 @@ const HomeStack = () => {
                 component={SearchRideScreen}
                 options={{
                     presentation: "modal",
-                    headerShown: true,
-                    headerStyle: { backgroundColor: Colors.backgroundLight },
-                    headerTitleStyle: { color: Colors.textPrimary },
+                    headerShown: false,
                 }}
             />
             <Stack.Screen
@@ -55,9 +51,7 @@ const HomeStack = () => {
                 component={DeliverPackageScreen}
                 options={{
                     presentation: "modal",
-                    headerShown: true,
-                    headerStyle: { backgroundColor: Colors.backgroundLight },
-                    headerTitleStyle: { color: Colors.textPrimary },
+                    headerShown: false,
                 }}
             />
             <Stack.Screen

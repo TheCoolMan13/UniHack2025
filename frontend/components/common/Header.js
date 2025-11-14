@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../../constants/colors";
 
 /**
@@ -8,22 +9,28 @@ import { Colors } from "../../constants/colors";
  * Provides consistent header styling with back button
  */
 
-const Header = ({ title, showBack = true, rightComponent, style }) => {
+const Header = ({ title, showBack = true, rightComponent, style, showStatusBar = false }) => {
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
 
     return (
-        <View style={[styles.header, style]}>
-            {showBack && (
-                <TouchableOpacity
-                    onPress={() => navigation.goBack()}
-                    style={styles.backButton}
-                    activeOpacity={0.7}
-                >
-                    <Text style={styles.backText}>←</Text>
-                </TouchableOpacity>
-            )}
-            <Text style={styles.title}>{title}</Text>
-            {rightComponent && <View style={styles.rightComponent}>{rightComponent}</View>}
+        <View style={[styles.headerContainer, { backgroundColor: showStatusBar ? "#000000" : "transparent" }]}>
+            {/* Black status bar area - only if showStatusBar is true */}
+            {showStatusBar && <View style={[styles.statusBarArea, { height: insets.top }]} />}
+            {/* Header content */}
+            <View style={[styles.header, { paddingTop: showStatusBar ? 0 : 20 }, style]}>
+                {showBack && (
+                    <TouchableOpacity
+                        onPress={() => navigation.goBack()}
+                        style={styles.backButton}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.backText}>←</Text>
+                    </TouchableOpacity>
+                )}
+                <Text style={styles.title}>{title}</Text>
+                {rightComponent && <View style={styles.rightComponent}>{rightComponent}</View>}
+            </View>
         </View>
     );
 };
@@ -31,11 +38,16 @@ const Header = ({ title, showBack = true, rightComponent, style }) => {
 export default Header;
 
 const styles = StyleSheet.create({
+    headerContainer: {
+        // backgroundColor is set dynamically based on showStatusBar prop
+    },
+    statusBarArea: {
+        backgroundColor: "#000000",
+    },
     header: {
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: 16,
-        paddingTop: 20,
         paddingBottom: 16,
         backgroundColor: Colors.backgroundLight,
     },

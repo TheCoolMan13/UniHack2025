@@ -154,7 +154,7 @@ const MyRidesScreen = () => {
 
     return (
         <View style={styles.container}>
-            <Header title="My Rides" showBack={false} />
+            <Header title="My Rides" showBack={false} showStatusBar={true} />
             
             {/* Tab Selector */}
             <View style={styles.tabContainer}>

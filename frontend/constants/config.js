@@ -20,11 +20,10 @@ export const API_CONFIG = {
 };
 
 // Google Maps API Configuration
+// API key is loaded from .env file (EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
+// See .env.example for setup instructions
 export const GOOGLE_MAPS_CONFIG = {
-  // Add your Google Maps API key here
-  // Get it from: https://console.cloud.google.com/google/maps-apis
-  // Enable these APIs: Places API (New), Geocoding API
-  API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyCskit7K-AaJaoMryKbLhp0J1zRxq2V3Jc',
+  API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
   PLACES_AUTOCOMPLETE_URL: 'https://places.googleapis.com/v1/places:autocomplete',
   PLACES_DETAILS_URL: 'https://places.googleapis.com/v1/places',
   GEOCODING_URL: 'https://maps.googleapis.com/maps/api/geocode/json',

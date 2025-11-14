@@ -47,12 +47,33 @@ app.use('/api/routes', routesRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
+  console.error('='.repeat(60));
+  console.error('ERROR MIDDLEWARE CAUGHT ERROR');
+  console.error('='.repeat(60));
+  console.error('Error:', err);
+  console.error('Error message:', err?.message);
+  console.error('Error stack:', err?.stack);
+  console.error('='.repeat(60));
+  
+  const status = err.status || err.statusCode || 500;
+  const message = err?.message || err?.toString() || 'Internal Server Error';
+  
+  const errorResponse = {
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
+    message: message,
+    error: message,
+  };
+  
+  if (process.env.NODE_ENV !== 'production') {
+    errorResponse.stack = err?.stack;
+    errorResponse.name = err?.name;
+    errorResponse.details = {
+      status: status,
+      code: err?.code,
+    };
+  }
+  
+  res.status(status).json(errorResponse);
 });
 
 // 404 handler

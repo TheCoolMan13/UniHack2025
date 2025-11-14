@@ -95,8 +95,25 @@ const isDayMatch = (days1, days2) => {
  * Uses a hybrid approach: quick filtering first, then real route checks for accuracy
  */
 const findMatchingRides = async (passengerRoute, driverRoutes) => {
-  const matches = [];
-  const USE_REAL_ROUTES = process.env.USE_REAL_ROUTES !== 'false'; // Default to true if not set
+  try {
+    const matches = [];
+    const USE_REAL_ROUTES = process.env.USE_REAL_ROUTES !== 'false'; // Default to true if not set
+
+    // Validate inputs
+    if (!passengerRoute) {
+      throw new Error('passengerRoute is required');
+    }
+    if (!passengerRoute.pickupLocation || !passengerRoute.dropoffLocation) {
+      throw new Error('passengerRoute must have pickupLocation and dropoffLocation');
+    }
+
+    // Handle empty driver routes
+    if (!driverRoutes || driverRoutes.length === 0) {
+      console.log('No driver routes to match against');
+      return matches;
+    }
+
+    console.log(`Starting matching for ${driverRoutes.length} driver routes, USE_REAL_ROUTES=${USE_REAL_ROUTES}`);
 
   // First pass: Quick filtering using simple distance (fast)
   // This filters out obviously bad matches before expensive API calls
@@ -130,25 +147,52 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
       let dropoffDistance = Infinity;
 
       if (USE_REAL_ROUTES) {
-        // Use real route calculation for accurate matching
-        const pickupCheck = await routeService.isPointOnRoute(
-          passengerRoute.pickupLocation,
-          driverRoute.pickupLocation,
-          driverRoute.dropoffLocation,
-          2 // 2km threshold
-        );
+        try {
+          // Use real route calculation for accurate matching
+          const pickupCheck = await routeService.isPointOnRoute(
+            passengerRoute.pickupLocation,
+            driverRoute.pickupLocation,
+            driverRoute.dropoffLocation,
+            2 // 2km threshold
+          );
 
-        const dropoffCheck = await routeService.isPointOnRoute(
-          passengerRoute.dropoffLocation,
-          driverRoute.pickupLocation,
-          driverRoute.dropoffLocation,
-          2
-        );
+          const dropoffCheck = await routeService.isPointOnRoute(
+            passengerRoute.dropoffLocation,
+            driverRoute.pickupLocation,
+            driverRoute.dropoffLocation,
+            2
+          );
 
-        pickupOnRoute = pickupCheck.isOnRoute;
-        dropoffOnRoute = dropoffCheck.isOnRoute;
-        pickupDistance = pickupCheck.distance;
-        dropoffDistance = dropoffCheck.distance;
+          pickupOnRoute = pickupCheck.isOnRoute;
+          dropoffOnRoute = dropoffCheck.isOnRoute;
+          pickupDistance = pickupCheck.distance;
+          dropoffDistance = dropoffCheck.distance;
+        } catch (routeError) {
+          console.error(`Route calculation error for driver ${driverRoute.id}:`, routeError.message);
+          // Fallback to simple calculation if route service fails
+          pickupOnRoute = isPointOnRoute(
+            passengerRoute.pickupLocation,
+            driverRoute.pickupLocation,
+            driverRoute.dropoffLocation,
+            2
+          );
+          dropoffOnRoute = isPointOnRoute(
+            passengerRoute.dropoffLocation,
+            driverRoute.pickupLocation,
+            driverRoute.dropoffLocation,
+            2
+          );
+          pickupDistance = distanceToLineSegment(
+            passengerRoute.pickupLocation,
+            driverRoute.pickupLocation,
+            driverRoute.dropoffLocation
+          );
+          dropoffDistance = distanceToLineSegment(
+            passengerRoute.dropoffLocation,
+            driverRoute.pickupLocation,
+            driverRoute.dropoffLocation
+          );
+        }
       } else {
         // Fallback to simple calculation if real routes disabled
         pickupOnRoute = isPointOnRoute(
@@ -227,7 +271,8 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         });
       }
     } catch (error) {
-      console.error(`Error matching route for driver ${driverRoute.id}:`, error);
+      console.error(`Error matching route for driver ${driverRoute.id}:`, error.message);
+      console.error(`Error stack for driver ${driverRoute.id}:`, error.stack);
       // Continue with next route if one fails
       // Fallback to simple calculation
       try {
@@ -277,13 +322,21 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
           });
         }
       } catch (fallbackError) {
-        console.error('Fallback matching also failed:', fallbackError);
+        console.error('Fallback matching also failed:', fallbackError.message);
+        console.error('Fallback error stack:', fallbackError.stack);
+        // Skip this route and continue
       }
     }
   }
 
-  // Sort by match score (highest first)
-  return matches.sort((a, b) => b.matchScore - a.matchScore);
+    // Sort by match score (highest first)
+    return matches.sort((a, b) => b.matchScore - a.matchScore);
+  } catch (error) {
+    console.error('Error in findMatchingRides:', error);
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
+    throw error; // Re-throw to be caught by controller
+  }
 };
 
 module.exports = {

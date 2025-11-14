@@ -7,10 +7,14 @@ const { findMatchingRides } = require('../services/matchingService');
  * @route   POST /api/rides
  * @access  Private (Driver)
  */
-const createRide = async (req, res) => {
+const createRide = async (req, res, next) => {
   try {
+    console.log('Create ride request body:', JSON.stringify(req.body, null, 2));
+    console.log('User ID:', req.user?.id);
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('Validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
@@ -31,6 +35,18 @@ const createRide = async (req, res) => {
       available_seats
     } = req.body;
 
+    console.log('Inserting ride with data:', {
+      driver_id: req.user.id,
+      pickup_latitude,
+      pickup_longitude,
+      dropoff_latitude,
+      dropoff_longitude,
+      schedule_days: JSON.stringify(schedule_days),
+      schedule_time,
+      price,
+      available_seats
+    });
+
     const [result] = await db.execute(
       `INSERT INTO rides (
         driver_id, pickup_latitude, pickup_longitude, pickup_address,
@@ -39,18 +55,20 @@ const createRide = async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
-        pickup_latitude,
-        pickup_longitude,
+        parseFloat(pickup_latitude),
+        parseFloat(pickup_longitude),
         pickup_address,
-        dropoff_latitude,
-        dropoff_longitude,
+        parseFloat(dropoff_latitude),
+        parseFloat(dropoff_longitude),
         dropoff_address,
         JSON.stringify(schedule_days),
         schedule_time,
-        price,
-        available_seats
+        parseFloat(price),
+        parseInt(available_seats)
       ]
     );
+
+    console.log('Ride inserted with ID:', result.insertId);
 
     // Get created ride with driver info
     const [rides] = await db.execute(
@@ -61,20 +79,59 @@ const createRide = async (req, res) => {
       [result.insertId]
     );
 
-    const ride = rides[0];
-    ride.schedule_days = JSON.parse(ride.schedule_days);
+    if (!rides || rides.length === 0) {
+      throw new Error('Failed to retrieve created ride');
+    }
 
-    res.status(201).json({
+    const ride = rides[0];
+    // MySQL JSON columns are already parsed, but sometimes they're strings
+    if (ride.schedule_days) {
+      if (typeof ride.schedule_days === 'string') {
+        try {
+          ride.schedule_days = JSON.parse(ride.schedule_days);
+        } catch (e) {
+          ride.schedule_days = [];
+        }
+      }
+    } else {
+      ride.schedule_days = [];
+    }
+    ride.pickup_latitude = parseFloat(ride.pickup_latitude);
+    ride.pickup_longitude = parseFloat(ride.pickup_longitude);
+    ride.dropoff_latitude = parseFloat(ride.dropoff_latitude);
+    ride.dropoff_longitude = parseFloat(ride.dropoff_longitude);
+    ride.price = parseFloat(ride.price);
+
+    console.log('Ride created successfully:', ride.id);
+
+    return res.status(201).json({
       success: true,
       message: 'Ride created successfully',
       data: { ride }
     });
   } catch (error) {
-    console.error('Create ride error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error creating ride'
-    });
+    console.error('='.repeat(60));
+    console.error('CREATE RIDE ERROR');
+    console.error('='.repeat(60));
+    console.error('Error:', error);
+    console.error('Error message:', error?.message);
+    console.error('Error code:', error?.code);
+    console.error('Error stack:', error?.stack);
+    console.error('='.repeat(60));
+    
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        message: error?.message || 'Server error creating ride',
+        error: error?.message,
+        ...(process.env.NODE_ENV !== 'production' && { 
+          stack: error?.stack,
+          code: error?.code 
+        })
+      });
+    } else {
+      next(error);
+    }
   }
 };
 
@@ -117,10 +174,18 @@ const getMyRides = async (req, res) => {
       );
     }
 
-    // Parse JSON fields
+    // Parse JSON fields (MySQL JSON columns are already parsed, but sometimes they're strings)
     rides.forEach(ride => {
       if (ride.schedule_days) {
-        ride.schedule_days = JSON.parse(ride.schedule_days);
+        if (typeof ride.schedule_days === 'string') {
+          try {
+            ride.schedule_days = JSON.parse(ride.schedule_days);
+          } catch (e) {
+            ride.schedule_days = [];
+          }
+        }
+      } else {
+        ride.schedule_days = [];
       }
     });
 
@@ -373,7 +438,7 @@ const getActiveRides = async (req, res) => {
     // Parse schedule_days for each ride
     const rides = allRides.map(ride => ({
       ...ride,
-      schedule_days: JSON.parse(ride.schedule_days),
+      schedule_days: typeof ride.schedule_days === 'string' ? JSON.parse(ride.schedule_days) : ride.schedule_days,
       pickup_latitude: parseFloat(ride.pickup_latitude),
       pickup_longitude: parseFloat(ride.pickup_longitude),
       dropoff_latitude: parseFloat(ride.dropoff_latitude),
@@ -399,10 +464,14 @@ const getActiveRides = async (req, res) => {
  * @route   POST /api/rides/search
  * @access  Private
  */
-const searchRides = async (req, res) => {
+const searchRides = async (req, res, next) => {
   try {
+    // Log incoming request for debugging
+    console.log('Search rides request body:', JSON.stringify(req.body, null, 2));
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('Validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
@@ -419,25 +488,80 @@ const searchRides = async (req, res) => {
       schedule_time
     } = req.body;
 
-    // Get all active rides
-    const [allRides] = await db.execute(
-      `SELECT r.*, u.name as driver_name, u.rating as driver_rating
-       FROM rides r
-       JOIN users u ON r.driver_id = u.id
-       WHERE r.status = 'active' AND r.available_seats > 0`
-    );
+    // Log parsed values
+    console.log('Parsed search params:', {
+      pickup_latitude,
+      pickup_longitude,
+      dropoff_latitude,
+      dropoff_longitude,
+      schedule_days,
+      schedule_time
+    });
 
-    // Parse schedule_days for each ride
-    const ridesWithParsedDays = allRides.map(ride => ({
-      ...ride,
-      schedule_days: JSON.parse(ride.schedule_days)
-    }));
+    // Get all active rides
+    let allRides;
+    try {
+      [allRides] = await db.execute(
+        `SELECT r.*, u.name as driver_name, u.rating as driver_rating
+         FROM rides r
+         JOIN users u ON r.driver_id = u.id
+         WHERE r.status = 'active' AND r.available_seats > 0`
+      );
+      console.log('Database query successful. Found', allRides?.length || 0, 'rides');
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      throw new Error(`Database error: ${dbError.message}`);
+    }
+
+    // If no rides found, return empty results (this is OK, not an error)
+    if (!allRides || allRides.length === 0) {
+      console.log('No active rides found in database - returning empty matches');
+      return res.json({
+        success: true,
+        data: {
+          matches: [],
+          count: 0
+        }
+      });
+    }
+
+    // Parse schedule_days for each ride (MySQL JSON columns are already parsed)
+    const ridesWithParsedDays = allRides.map(ride => {
+      try {
+        let scheduleDays = [];
+        if (ride.schedule_days) {
+          if (typeof ride.schedule_days === 'string') {
+            scheduleDays = JSON.parse(ride.schedule_days);
+          } else {
+            scheduleDays = ride.schedule_days; // Already an object/array
+          }
+        }
+        return {
+          ...ride,
+          schedule_days: scheduleDays
+        };
+      } catch (parseError) {
+        console.error(`Error parsing schedule_days for ride ${ride.id}:`, parseError);
+        return {
+          ...ride,
+          schedule_days: []
+        };
+      }
+    });
+
+    // Validate required fields
+    if (!pickup_latitude || !pickup_longitude || !dropoff_latitude || !dropoff_longitude) {
+      return res.status(400).json({
+        success: false,
+        message: 'Pickup and dropoff coordinates are required'
+      });
+    }
 
     // Use matching service to find matches
     const passengerRoute = {
       pickupLocation: { latitude: pickup_latitude, longitude: pickup_longitude },
       dropoffLocation: { latitude: dropoff_latitude, longitude: dropoff_longitude },
-      schedule: { days: schedule_days, time: schedule_time }
+      schedule: { days: schedule_days || [], time: schedule_time || '' }
     };
 
     const driverRoutes = ridesWithParsedDays.map(ride => ({
@@ -461,21 +585,47 @@ const searchRides = async (req, res) => {
       available_seats: ride.available_seats
     }));
 
-    const matches = await findMatchingRides(passengerRoute, driverRoutes);
+    console.log('Calling findMatchingRides with', driverRoutes.length, 'driver routes');
+    
+    let matches;
+    try {
+      matches = await findMatchingRides(passengerRoute, driverRoutes);
+      console.log('Matching completed. Found', matches.length, 'matches');
+    } catch (matchingError) {
+      console.error('Error in findMatchingRides:', matchingError);
+      console.error('Matching error message:', matchingError?.message);
+      // If matching fails, return empty results instead of crashing
+      matches = [];
+    }
 
     res.json({
       success: true,
       data: {
-        matches,
-        count: matches.length
+        matches: matches || [],
+        count: matches ? matches.length : 0
       }
     });
   } catch (error) {
-    console.error('Search rides error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error searching rides'
-    });
+    // Log everything about the error
+    console.error('='.repeat(60));
+    console.error('SEARCH RIDES ERROR CAUGHT');
+    console.error('='.repeat(60));
+    console.error('Error:', error);
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
+    console.error('='.repeat(60));
+    
+    if (!res.headersSent) {
+      const errorMessage = error?.message || 'Server error searching rides';
+      res.status(500).json({
+        success: false,
+        message: errorMessage,
+        error: errorMessage,
+        ...(process.env.NODE_ENV !== 'production' && { stack: error?.stack })
+      });
+    } else {
+      next(error);
+    }
   }
 };
 

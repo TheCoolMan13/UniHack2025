@@ -1,0 +1,103 @@
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_CONFIG } from "../constants/config";
+
+/**
+ * API Service
+ * Handles all API calls to the backend
+ */
+
+const api = axios.create({
+    baseURL: API_CONFIG.BASE_URL,
+    timeout: API_CONFIG.TIMEOUT,
+    headers: {
+        "Content-Type": "application/json",
+    },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+    async (config) => {
+        try {
+            // Get token from AsyncStorage and add to headers
+            const token = await AsyncStorage.getItem("token");
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
+        } catch (error) {
+            console.error("Error getting token from storage:", error);
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        // Handle common errors
+        if (error.response?.status === 401) {
+            // Unauthorized - clear token and user data
+            try {
+                await AsyncStorage.removeItem("token");
+                await AsyncStorage.removeItem("user");
+                await AsyncStorage.removeItem("currentRole");
+            } catch (storageError) {
+                console.error("Error clearing storage:", storageError);
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
+/**
+ * Authentication API
+ */
+export const authAPI = {
+    login: (email, password) => api.post("/auth/login", { email, password }),
+    register: (userData) => api.post("/auth/register", userData),
+    logout: () => api.post("/auth/logout"),
+    getCurrentUser: () => api.get("/auth/me"),
+};
+
+/**
+ * Rides API
+ */
+export const ridesAPI = {
+    // Driver endpoints
+    createRide: (rideData) => api.post("/rides", rideData),
+    getMyRides: (role) => api.get(`/rides?role=${role}`),
+    updateRide: (rideId, updates) => api.put(`/rides/${rideId}`, updates),
+    deleteRide: (rideId) => api.delete(`/rides/${rideId}`),
+    
+    // Passenger endpoints
+    searchRides: (searchParams) => api.post("/rides/search", searchParams),
+    requestRide: (rideId) => api.post(`/rides/${rideId}/request`),
+    
+    // Common endpoints
+    getRideDetails: (rideId) => api.get(`/rides/${rideId}`),
+    acceptRequest: (rideId, requestId) => api.post(`/rides/${rideId}/accept`, { requestId }),
+    rejectRequest: (rideId, requestId) => api.post(`/rides/${rideId}/reject`, { requestId }),
+};
+
+/**
+ * Matching API
+ */
+export const matchingAPI = {
+    findMatches: (routeData) => api.post("/matching/search", routeData),
+    checkOverlap: (route1, route2) => api.post("/matching/overlap", { route1, route2 }),
+};
+
+/**
+ * Geocoding API
+ */
+export const geocodingAPI = {
+    geocode: (address) => api.get(`/geocoding/geocode?address=${encodeURIComponent(address)}`),
+    reverseGeocode: (lat, lng) => api.get(`/geocoding/reverse?lat=${lat}&lng=${lng}`),
+};
+
+export default api;
+

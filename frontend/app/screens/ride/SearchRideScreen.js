@@ -1,0 +1,332 @@
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from "react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { Colors } from "../../../constants/colors";
+import Header from "../../../components/common/Header";
+import Input from "../../../components/common/Input";
+import Button from "../../../components/common/Button";
+import Card from "../../../components/common/Card";
+import { ridesAPI } from "../../../services/api";
+
+/**
+ * Search Ride Screen
+ * Allows passengers to search for matching rides
+ */
+
+const SearchRideScreen = () => {
+    const navigation = useNavigation();
+    const route = useRoute();
+    const [pickupLocation, setPickupLocation] = useState("");
+    const [dropoffLocation, setDropoffLocation] = useState("");
+    const [pickupCoordinates, setPickupCoordinates] = useState(null);
+    const [dropoffCoordinates, setDropoffCoordinates] = useState(null);
+    const [time, setTime] = useState("");
+    const [days, setDays] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [results, setResults] = useState([]);
+
+    // Handle location selection from LocationSelectionScreen
+    useEffect(() => {
+        if (route.params?.selectedLocation) {
+            const { selectedLocation } = route.params;
+            if (selectedLocation.locationType === 'pickup') {
+                setPickupLocation(selectedLocation.address || "");
+                setPickupCoordinates({
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                });
+            } else if (selectedLocation.locationType === 'dropoff') {
+                setDropoffLocation(selectedLocation.address || "");
+                setDropoffCoordinates({
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                });
+            }
+            // Clear the params to avoid re-triggering
+            navigation.setParams({ selectedLocation: undefined });
+        }
+    }, [route.params?.selectedLocation]);
+
+    const weekDays = [
+        { label: "Mon", value: "monday" },
+        { label: "Tue", value: "tuesday" },
+        { label: "Wed", value: "wednesday" },
+        { label: "Thu", value: "thursday" },
+        { label: "Fri", value: "friday" },
+        { label: "Sat", value: "saturday" },
+        { label: "Sun", value: "sunday" },
+    ];
+
+    const toggleDay = (dayValue) => {
+        if (days.includes(dayValue)) {
+            setDays(days.filter((d) => d !== dayValue));
+        } else {
+            setDays([...days, dayValue]);
+        }
+    };
+
+    const handleSearch = async () => {
+        if (!pickupLocation || !dropoffLocation || !time || days.length === 0) {
+            Alert.alert("Error", "Please fill in all required fields");
+            return;
+        }
+
+        if (!pickupCoordinates || !dropoffCoordinates) {
+            Alert.alert("Error", "Please select valid pickup and dropoff locations");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const searchParams = {
+                pickup_latitude: pickupCoordinates.latitude,
+                pickup_longitude: pickupCoordinates.longitude,
+                pickup_address: pickupLocation,
+                dropoff_latitude: dropoffCoordinates.latitude,
+                dropoff_longitude: dropoffCoordinates.longitude,
+                dropoff_address: dropoffLocation,
+                schedule_days: days,
+                schedule_time: time,
+            };
+
+            const response = await ridesAPI.searchRides(searchParams);
+
+            if (response.data.success) {
+                const matches = response.data.data.matches || [];
+                setResults(matches);
+                if (matches.length === 0) {
+                    Alert.alert("No Results", "No matching rides found. Try adjusting your search criteria.");
+                }
+            } else {
+                Alert.alert("Error", response.data.message || "Failed to search rides");
+                setResults([]);
+            }
+        } catch (error) {
+            console.error("Search rides error:", error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to search rides";
+            Alert.alert("Error", errorMessage);
+            setResults([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+            <Header title="Search Rides" />
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+            >
+                <Card style={styles.card}>
+                    <Text style={styles.sectionTitle}>Your Route</Text>
+
+                    <TouchableOpacity
+                        onPress={() => {
+                            navigation.navigate("LocationSelection", {
+                                locationType: "pickup",
+                                initialLocation: pickupCoordinates,
+                                returnScreen: "SearchRide",
+                            });
+                        }}
+                    >
+                        <Input
+                            label="Pickup Location"
+                            value={pickupLocation}
+                            onChangeText={setPickupLocation}
+                            placeholder="Tap to select pickup location"
+                            editable={false}
+                            pointerEvents="none"
+                        />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={() => {
+                            navigation.navigate("LocationSelection", {
+                                locationType: "dropoff",
+                                initialLocation: dropoffCoordinates,
+                                returnScreen: "SearchRide",
+                            });
+                        }}
+                    >
+                        <Input
+                            label="Dropoff Location"
+                            value={dropoffLocation}
+                            onChangeText={setDropoffLocation}
+                            placeholder="Tap to select dropoff location"
+                            editable={false}
+                            pointerEvents="none"
+                        />
+                    </TouchableOpacity>
+                </Card>
+
+                <Card style={styles.card}>
+                    <Text style={styles.sectionTitle}>Schedule</Text>
+
+                    <Input
+                        label="Time"
+                        value={time}
+                        onChangeText={setTime}
+                        placeholder="e.g., 7:30 AM"
+                    />
+
+                    <Text style={styles.label}>Days of Week</Text>
+                    <View style={styles.daysContainer}>
+                        {weekDays.map((day) => (
+                            <Button
+                                key={day.value}
+                                title={day.label}
+                                variant={days.includes(day.value) ? "primary" : "outline"}
+                                onPress={() => toggleDay(day.value)}
+                                style={styles.dayButton}
+                            />
+                        ))}
+                    </View>
+                </Card>
+
+                <Button
+                    title="Search Rides"
+                    onPress={handleSearch}
+                    loading={loading}
+                    style={styles.searchButton}
+                />
+
+                {/* Results */}
+                {results.length > 0 && (
+                    <View style={styles.resultsContainer}>
+                        <Text style={styles.resultsTitle}>Found {results.length} matching ride(s)</Text>
+                        {results.map((ride) => (
+                            <Card key={ride.id} style={styles.resultCard}>
+                                <View style={styles.resultHeader}>
+                                    <Text style={styles.driverName}>{ride.driver_name || "Driver"}</Text>
+                                    <Text style={styles.rating}>⭐ {ride.driver_rating || "0.0"}</Text>
+                                </View>
+                                <Text style={styles.route}>
+                                    {ride.pickup_address} → {ride.dropoff_address}
+                                </Text>
+                                <View style={styles.resultFooter}>
+                                    <Text style={styles.time}>{ride.schedule_time}</Text>
+                                    <Text style={styles.price}>${parseFloat(ride.price || 0).toFixed(2)}</Text>
+                                </View>
+                                <Text style={styles.seats}>Available seats: {ride.available_seats || 1}</Text>
+                                <Button
+                                    title="Request Ride"
+                                    onPress={async () => {
+                                        try {
+                                            const response = await ridesAPI.requestRide(ride.id);
+                                            if (response.data.success) {
+                                                Alert.alert("Success", "Ride request sent! The driver will be notified.");
+                                            } else {
+                                                Alert.alert("Error", response.data.message || "Failed to request ride");
+                                            }
+                                        } catch (error) {
+                                            console.error("Request ride error:", error);
+                                            const errorMessage = error.response?.data?.message || error.message || "Failed to request ride";
+                                            Alert.alert("Error", errorMessage);
+                                        }
+                                    }}
+                                    style={styles.requestButton}
+                                />
+                            </Card>
+                        ))}
+                    </View>
+                )}
+            </ScrollView>
+        </KeyboardAvoidingView>
+    );
+};
+
+export default SearchRideScreen;
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: Colors.background,
+    },
+    scrollContent: {
+        padding: 16,
+        paddingBottom: 40,
+    },
+    card: {
+        marginBottom: 16,
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: "bold",
+        color: Colors.textPrimary,
+        marginBottom: 16,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: Colors.textPrimary,
+        marginBottom: 12,
+    },
+    daysContainer: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8,
+        marginBottom: 8,
+    },
+    dayButton: {
+        width: "30%",
+        paddingVertical: 10,
+    },
+    searchButton: {
+        marginTop: 16,
+        marginBottom: 24,
+    },
+    resultsContainer: {
+        marginTop: 8,
+    },
+    resultsTitle: {
+        fontSize: 18,
+        fontWeight: "bold",
+        color: Colors.textPrimary,
+        marginBottom: 16,
+    },
+    resultCard: {
+        marginBottom: 16,
+    },
+    resultHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 8,
+    },
+    driverName: {
+        fontSize: 18,
+        fontWeight: "bold",
+        color: Colors.textPrimary,
+    },
+    rating: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+    },
+    route: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginBottom: 12,
+    },
+    resultFooter: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        marginBottom: 12,
+    },
+    time: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+    },
+    price: {
+        fontSize: 16,
+        fontWeight: "bold",
+        color: Colors.primary,
+    },
+    requestButton: {
+        marginTop: 8,
+    },
+});
+

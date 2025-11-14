@@ -100,5 +100,14 @@ export const geocodingAPI = {
     reverseGeocode: (lat, lng) => api.get(`/geocoding/reverse?lat=${lat}&lng=${lng}`),
 };
 
+/**
+ * Routes API
+ */
+export const routesAPI = {
+    calculateRoute: (origin, destination) => api.post("/routes/calculate", { origin, destination }),
+    calculateRouteWithWaypoints: (origin, waypoints, destination) => 
+        api.post("/routes/calculate-with-waypoints", { origin, waypoints, destination }),
+};
+
 export default api;
 

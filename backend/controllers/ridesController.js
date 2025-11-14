@@ -582,18 +582,61 @@ const searchRides = async (req, res, next) => {
         time: ride.schedule_time
       },
       price: parseFloat(ride.price),
-      available_seats: ride.available_seats
+      available_seats: ride.available_seats,
+      // Include address fields for frontend compatibility
+      pickup_address: ride.pickup_address,
+      dropoff_address: ride.dropoff_address,
+      schedule_time: ride.schedule_time,
+      schedule_days: ride.schedule_days
     }));
 
-    console.log('Calling findMatchingRides with', driverRoutes.length, 'driver routes');
+    console.log('Calling enhanced findMatchingRides with', driverRoutes.length, 'driver routes');
     
     let matches;
     try {
       matches = await findMatchingRides(passengerRoute, driverRoutes);
-      console.log('Matching completed. Found', matches.length, 'matches');
+      console.log('Enhanced matching completed. Found', matches.length, 'matches');
+      
+      // Enhance matches with address fields and ensure all frontend-required fields are present
+      const enhancedMatches = matches.map(match => {
+        // Find original ride data to get addresses
+        const originalRide = ridesWithParsedDays.find(r => r.id === match.id);
+        
+        // Get driver's time (from match or original ride)
+        const driverTime = match.driverTime || match.schedule?.time || originalRide?.schedule_time || '';
+        
+        return {
+          ...match,
+          // Ensure address fields are present for frontend
+          pickup_address: match.pickup_address || originalRide?.pickup_address || 'N/A',
+          dropoff_address: match.dropoff_address || originalRide?.dropoff_address || 'N/A',
+          schedule_time: driverTime, // Use driver's time
+          driverTime: driverTime, // Explicitly set driverTime for frontend
+          schedule_days: match.schedule?.days || originalRide?.schedule_days || [],
+          // Enhanced recommendation data (already included from matchingService)
+          // matchScore, reasons, recommendedRoute, detourDistance, timeDifference, etc. are already in match
+        };
+      });
+      
+      matches = enhancedMatches;
+      
+      // Filter to only return the best matches
+      // 1. Only matches with score >= 50 (good quality threshold)
+      // 2. Limit to top 10 best matches
+        const MIN_MATCH_SCORE = 55; // Minimum quality score - VERY strict
+        const MAX_RESULTS = 10; // Maximum number of results
+      
+      const bestMatches = matches
+        .filter(match => match.matchScore >= MIN_MATCH_SCORE)
+        .slice(0, MAX_RESULTS);
+      
+      matches = bestMatches;
+      
+      console.log(`Filtered to ${matches.length} best matches (score >= ${MIN_MATCH_SCORE}, max ${MAX_RESULTS})`);
     } catch (matchingError) {
       console.error('Error in findMatchingRides:', matchingError);
       console.error('Matching error message:', matchingError?.message);
+      console.error('Matching error stack:', matchingError?.stack);
       // If matching fails, return empty results instead of crashing
       matches = [];
     }

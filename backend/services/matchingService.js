@@ -146,18 +146,20 @@ const checkRouteOrder = async (pickupPoint, dropoffPoint, routeStart, routeEnd) 
     const isValidOrder = pickupIndex < dropoffIndex;
     
     // Calculate distances using routeService for accuracy
+    // Use VERY strict threshold for city-scale matching (100 meters)
+    const ON_ROUTE_THRESHOLD = 0.1; // 100 meters - VERY strict for city distances
     const pickupCheck = await routeService.isPointOnRoute(
       pickupPoint,
       routeStart,
       routeEnd,
-      5 // 5km threshold for order checking
+      ON_ROUTE_THRESHOLD
     );
     
     const dropoffCheck = await routeService.isPointOnRoute(
       dropoffPoint,
       routeStart,
       routeEnd,
-      5
+      ON_ROUTE_THRESHOLD
     );
 
     return {
@@ -259,6 +261,7 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
       let detourDuration = 0;
       let originalRouteDistance = 0;
       let originalRouteDuration = 0;
+      let originalRouteData = null; // Store original route data for frontend display
 
       if (USE_REAL_ROUTES) {
         // Get driver's original route for comparison
@@ -268,6 +271,14 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         );
         originalRouteDistance = originalRoute.distance;
         originalRouteDuration = originalRoute.duration;
+        // Store original route data for frontend display
+        originalRouteData = {
+          distance: originalRoute.distance,
+          duration: originalRoute.duration,
+          distanceText: originalRoute.distanceText,
+          durationText: originalRoute.durationText,
+          polyline: originalRoute.polyline, // Include polyline for map display
+        };
 
         // Check route order and point positions
         const orderCheck = await checkRouteOrder(
@@ -303,17 +314,19 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         }
       } else {
         // Fallback to simple calculation if real routes disabled
+        // Use VERY strict threshold for city-scale matching (100 meters)
+        const ON_ROUTE_THRESHOLD = 0.1; // 100 meters - VERY strict for city distances
         pickupOnRoute = isPointOnRoute(
           passengerRoute.pickupLocation,
           driverRoute.pickupLocation,
           driverRoute.dropoffLocation,
-          2
+          ON_ROUTE_THRESHOLD
         );
         dropoffOnRoute = isPointOnRoute(
           passengerRoute.dropoffLocation,
           driverRoute.pickupLocation,
           driverRoute.dropoffLocation,
-          2
+          ON_ROUTE_THRESHOLD
         );
         pickupDistance = distanceToLineSegment(
           passengerRoute.pickupLocation,
@@ -354,86 +367,163 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         driverRoute.schedule.days
       );
 
-      // Calculate match score with improved logic
-      if (pickupOnRoute && dropoffOnRoute && isValidOrder) {
-        matchScore += 40; // Perfect match: both on route and correct order
+      // Calculate match score with VERY strict city-scale logic
+      // Thresholds for city distances (in km) - MUCH stricter
+      const ON_ROUTE_THRESHOLD = 0.1; // 100 meters - must be VERY close to route
+      const NEAR_ROUTE_THRESHOLD = 0.5; // 500 meters - maximum acceptable distance
+      const CLOSE_TO_ROUTE_THRESHOLD = 1.0; // 1km - absolute maximum, with heavy penalty
+      
+      // Only consider "on route" if actually within VERY strict threshold
+      const strictPickupOnRoute = pickupOnRoute && pickupDistance <= ON_ROUTE_THRESHOLD;
+      const strictDropoffOnRoute = dropoffOnRoute && dropoffDistance <= ON_ROUTE_THRESHOLD;
+      
+      if (strictPickupOnRoute && strictDropoffOnRoute && isValidOrder) {
+        matchScore += 30; // Perfect match: both on route and correct order
         reasons.push('Perfect route alignment');
-      } else if (pickupOnRoute && dropoffOnRoute) {
-        matchScore += 30; // Both on route but order might be wrong
+      } else if (strictPickupOnRoute && strictDropoffOnRoute) {
+        matchScore += 18; // Both on route but order might be wrong
         reasons.push('Both points on route');
         if (!isValidOrder) {
+          matchScore -= 15;
           reasons.push('⚠️ Route order may be incorrect');
         }
-      } else if (pickupOnRoute) {
-        matchScore += 20;
+      } else if (strictPickupOnRoute) {
+        // Pickup is on route, check dropoff distance
+        matchScore += 10;
         reasons.push('Pickup on route');
-        if (dropoffDistance < 5) {
-          matchScore += 10;
-          reasons.push(`Dropoff near route (${dropoffDistance.toFixed(1)}km)`);
+        if (dropoffDistance <= NEAR_ROUTE_THRESHOLD) {
+          matchScore += 5;
+          reasons.push(`Dropoff near route (${dropoffDistance.toFixed(2)}km)`);
+        } else if (dropoffDistance <= CLOSE_TO_ROUTE_THRESHOLD) {
+          matchScore -= 5;
+          reasons.push(`Dropoff somewhat close (${dropoffDistance.toFixed(2)}km)`);
+        } else {
+          matchScore -= 15;
+          reasons.push(`Dropoff far from route (${dropoffDistance.toFixed(2)}km)`);
         }
-      } else if (dropoffOnRoute) {
-        matchScore += 20;
+      } else if (strictDropoffOnRoute) {
+        // Dropoff is on route, check pickup distance
+        matchScore += 10;
         reasons.push('Dropoff on route');
-        if (pickupDistance < 5) {
-          matchScore += 10;
-          reasons.push(`Pickup near route (${pickupDistance.toFixed(1)}km)`);
+        if (pickupDistance <= NEAR_ROUTE_THRESHOLD) {
+          matchScore += 5;
+          reasons.push(`Pickup near route (${pickupDistance.toFixed(2)}km)`);
+        } else if (pickupDistance <= CLOSE_TO_ROUTE_THRESHOLD) {
+          matchScore -= 5;
+          reasons.push(`Pickup somewhat close (${pickupDistance.toFixed(2)}km)`);
+        } else {
+          matchScore -= 15;
+          reasons.push(`Pickup far from route (${pickupDistance.toFixed(2)}km)`);
         }
       } else {
-        // Both points near route
-        if (pickupDistance < 5 && dropoffDistance < 5) {
-          matchScore += 20;
-          reasons.push(`Both points near route (pickup: ${pickupDistance.toFixed(1)}km, dropoff: ${dropoffDistance.toFixed(1)}km)`);
-        } else if (pickupDistance < 5) {
-          matchScore += 10;
-          reasons.push(`Pickup near route (${pickupDistance.toFixed(1)}km)`);
-        } else if (dropoffDistance < 5) {
-          matchScore += 10;
-          reasons.push(`Dropoff near route (${dropoffDistance.toFixed(1)}km)`);
+        // Neither point is strictly on route - score based on distances
+        if (pickupDistance <= NEAR_ROUTE_THRESHOLD && dropoffDistance <= NEAR_ROUTE_THRESHOLD) {
+          matchScore += 8;
+          reasons.push(`Both points near route (pickup: ${pickupDistance.toFixed(2)}km, dropoff: ${dropoffDistance.toFixed(2)}km)`);
+        } else if (pickupDistance <= NEAR_ROUTE_THRESHOLD) {
+          if (dropoffDistance <= CLOSE_TO_ROUTE_THRESHOLD) {
+            matchScore += 2;
+            reasons.push(`Pickup near route (${pickupDistance.toFixed(2)}km), dropoff close (${dropoffDistance.toFixed(2)}km)`);
+          } else {
+            matchScore -= 10;
+            reasons.push(`Pickup near route (${pickupDistance.toFixed(2)}km), but dropoff far (${dropoffDistance.toFixed(2)}km)`);
+          }
+        } else if (dropoffDistance <= NEAR_ROUTE_THRESHOLD) {
+          if (pickupDistance <= CLOSE_TO_ROUTE_THRESHOLD) {
+            matchScore += 2;
+            reasons.push(`Dropoff near route (${dropoffDistance.toFixed(2)}km), pickup close (${pickupDistance.toFixed(2)}km)`);
+          } else {
+            matchScore -= 10;
+            reasons.push(`Dropoff near route (${dropoffDistance.toFixed(2)}km), but pickup far (${pickupDistance.toFixed(2)}km)`);
+          }
+        } else if (pickupDistance <= CLOSE_TO_ROUTE_THRESHOLD && dropoffDistance <= CLOSE_TO_ROUTE_THRESHOLD) {
+          matchScore -= 5;
+          reasons.push(`Both points somewhat close (pickup: ${pickupDistance.toFixed(2)}km, dropoff: ${dropoffDistance.toFixed(2)}km)`);
+        } else {
+          // Too far from route - heavy penalty
+          matchScore -= 25;
+          reasons.push(`Points far from route (pickup: ${pickupDistance.toFixed(2)}km, dropoff: ${dropoffDistance.toFixed(2)}km)`);
         }
       }
 
-      // Penalize invalid order
-      if (!isValidOrder && (pickupOnRoute || dropoffOnRoute)) {
-        matchScore -= 15;
+      // Penalize invalid order VERY harshly
+      if (!isValidOrder && (strictPickupOnRoute || strictDropoffOnRoute)) {
+        matchScore -= 30;
         reasons.push('⚠️ Route order may require backtracking');
+      } else if (!isValidOrder && (pickupDistance <= 0.5 || dropoffDistance <= 0.5)) {
+        matchScore -= 20;
+        reasons.push('⚠️ Route order may be suboptimal');
+      } else if (!isValidOrder) {
+        matchScore -= 10;
+        reasons.push('⚠️ Route order may be suboptimal');
       }
 
-      // Time matching
+      // Time matching - allow slight differences (up to 30 min) but penalize larger ones
+      let timeDifference = 0; // Store time difference for frontend display
       if (timeMatch) {
-        matchScore += 25;
+        matchScore += 15;
         reasons.push('Time matches');
+        timeDifference = 0;
       } else {
-        // Partial time match (within 1 hour)
-        const timeDiff = Math.abs(
+        // Calculate time difference in minutes
+        timeDifference = Math.abs(
           parseTime(passengerRoute.schedule.time) - parseTime(driverRoute.schedule.time)
         );
-        if (timeDiff <= 60) {
-          matchScore += 10;
-          reasons.push('Time close');
-        }
-      }
-
-      // Day matching
-      if (dayMatch) {
-        matchScore += 15;
-        reasons.push('Days match');
-      }
-
-      // Detour penalty (smaller detour = better match)
-      if (detourDistance > 0) {
-        if (detourDistance < 2) {
-          matchScore += 5; // Small detour is good
-          reasons.push(`Minimal detour (+${detourDistance.toFixed(1)}km)`);
-        } else if (detourDistance < 5) {
-          // Neutral
+        
+        if (timeDifference <= 10) {
+          // Very close (within 10 min) - small bonus
+          matchScore += 8;
+          reasons.push(`Time very close (${Math.round(timeDifference)} min difference)`);
+        } else if (timeDifference <= 20) {
+          // Close (within 20 min) - small bonus
+          matchScore += 5;
+          reasons.push(`Time close (${Math.round(timeDifference)} min difference)`);
+        } else if (timeDifference <= 30) {
+          // Acceptable (within 30 min) - neutral, don't penalize
+          matchScore += 2;
+          reasons.push(`Time acceptable (${Math.round(timeDifference)} min difference)`);
+        } else if (timeDifference <= 60) {
+          // 30-60 min - heavy penalty
+          matchScore -= 20;
+          reasons.push(`Time off (${Math.round(timeDifference)} min difference)`);
         } else {
-          matchScore -= 5; // Large detour penalty
-          reasons.push(`Large detour (+${detourDistance.toFixed(1)}km)`);
+          // >60 min - unacceptable, heavy penalty (will likely filter out)
+          matchScore -= 40;
+          reasons.push(`Time unacceptable (${Math.round(timeDifference)} min difference)`);
         }
       }
 
-      // Only include if there's a meaningful match
-      if (matchScore >= 30) {
+      // Day matching - must match
+      if (dayMatch) {
+        matchScore += 10;
+        reasons.push('Days match');
+      } else {
+        matchScore -= 10;
+        reasons.push('Days do not match');
+      }
+
+      // Detour penalty - VERY strict for city distances
+      if (detourDistance > 0) {
+        if (detourDistance < 0.5) {
+          matchScore += 3; // Very small detour is acceptable
+          reasons.push(`Minimal detour (+${detourDistance.toFixed(2)}km)`);
+        } else if (detourDistance < 1) {
+          matchScore -= 2; // Small detour penalty
+          reasons.push(`Small detour (+${detourDistance.toFixed(2)}km)`);
+        } else if (detourDistance < 2) {
+          matchScore -= 8; // Moderate detour - significant penalty
+          reasons.push(`Moderate detour (+${detourDistance.toFixed(2)}km)`);
+        } else if (detourDistance < 3) {
+          matchScore -= 15; // Large detour - heavy penalty
+          reasons.push(`Large detour (+${detourDistance.toFixed(2)}km)`);
+        } else {
+          matchScore -= 25; // Very large detour - severe penalty
+          reasons.push(`Very large detour (+${detourDistance.toFixed(2)}km)`);
+        }
+      }
+
+      // Only include if there's a meaningful match - MUCH higher threshold
+      if (matchScore >= 50) {
         const match = {
           ...driverRoute,
           matchScore,
@@ -441,6 +531,8 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
           pickupDistance: pickupDistance < Infinity ? pickupDistance : null,
           dropoffDistance: dropoffDistance < Infinity ? dropoffDistance : null,
           isValidOrder,
+          timeDifference: timeDifference, // Include time difference for frontend display
+          driverTime: driverRoute.schedule.time, // Include driver's time for display
         };
 
         // Add route information if available
@@ -480,6 +572,12 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
           };
           match.detourDistance = Math.round(detourDistance * 10) / 10; // Round to 1 decimal
           match.detourDuration = Math.round(detourDuration);
+        }
+        
+        // Always include original route if available (even if no recommended route)
+        if (originalRouteData) {
+          match.originalRoute = originalRouteData;
+        } else if (originalRouteDistance > 0) {
           match.originalRoute = {
             distance: originalRouteDistance,
             duration: originalRouteDuration,

@@ -9,77 +9,96 @@ import { ridesAPI } from "../../../services/api";
 
 /**
  * My Rides Screen
- * Displays user's posted rides (driver) or requested rides (passenger)
+ * Displays user's requested rides (passenger) and offered rides (driver)
+ * Tabs: "Requested rides" / "Offered rides"
  */
 
 const MyRidesScreen = () => {
     const { currentRole, user } = useAuth();
-    const [activeTab, setActiveTab] = useState("active"); // 'active', 'pending', 'completed'
-    const [rides, setRides] = useState([]);
+    const [activeTab, setActiveTab] = useState("requested"); // 'requested' or 'offered'
+    const [requestedRides, setRequestedRides] = useState([]); // Rides user requested as passenger
+    const [offeredRides, setOfferedRides] = useState([]); // Rides user posted as driver
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     // Fetch rides from API
     useEffect(() => {
-        fetchRides();
-    }, [currentRole, activeTab]);
+        fetchAllRides();
+    }, [activeTab]);
 
-    const fetchRides = async () => {
+    const fetchAllRides = async () => {
         try {
             setLoading(true);
-            const response = await ridesAPI.getMyRides(currentRole);
             
-            if (response.data.success) {
-                const fetchedRides = response.data.data.rides || [];
-                
-                // Map API response to UI format and filter by status
-                const mappedRides = fetchedRides.map(ride => {
-                    // Determine status based on ride status and request status
-                    let status = ride.status || 'active';
-                    if (currentRole === 'passenger' && ride.request_status) {
-                        status = ride.request_status; // pending, accepted, rejected, cancelled
+            // Fetch both requested and offered rides in parallel
+            const [requestedResponse, offeredResponse] = await Promise.all([
+                ridesAPI.getMyRides('passenger').catch(() => ({ data: { success: false, data: { rides: [] } } })),
+                ridesAPI.getMyRides('driver').catch(() => ({ data: { success: false, data: { rides: [] } } }))
+            ]);
+
+            // Process requested rides (passenger role)
+            if (requestedResponse.data.success) {
+                const fetchedRequested = requestedResponse.data.data.rides || [];
+                const mappedRequested = fetchedRequested.map(ride => {
+                    // Map request status to display status
+                    let displayStatus = ride.request_status || 'pending';
+                    
+                    // Normalize status: accepted -> active, rejected/cancelled -> completed
+                    if (displayStatus === 'accepted') {
+                        displayStatus = 'active';
+                    } else if (displayStatus === 'rejected' || displayStatus === 'cancelled') {
+                        displayStatus = 'completed';
                     }
                     
                     return {
                         id: ride.id,
                         request_id: ride.request_id,
-                        pickup: ride.pickup_address,
-                        dropoff: ride.dropoff_address,
-                        time: ride.schedule_time,
-                        days: ride.schedule_days || [],
-                        status: status,
+                        pickup: ride.pickup_address || 'N/A',
+                        dropoff: ride.dropoff_address || 'N/A',
+                        time: ride.schedule_time || 'N/A',
+                        days: Array.isArray(ride.schedule_days) ? ride.schedule_days : (ride.schedule_days ? JSON.parse(ride.schedule_days) : []),
+                        status: ride.request_status || 'pending', // Original status: pending, accepted, rejected, cancelled
+                        displayStatus: displayStatus, // Display status: pending, active, completed
                         price: `$${parseFloat(ride.price || 0).toFixed(2)}`,
                         driver: ride.driver_name || 'Driver',
                         driver_rating: ride.driver_rating || 0,
-                        passenger: 'You',
                         available_seats: ride.available_seats || 1,
-                        request_count: ride.request_count || 0,
-                        requests: ride.requests || [],
-                        // Keep original ride data for actions
                         originalRide: ride,
                     };
                 });
-
-                // Filter by active tab
-                let filtered = mappedRides;
-                if (activeTab === 'active') {
-                    filtered = mappedRides.filter(r => r.status === 'active' || r.status === 'accepted');
-                } else if (activeTab === 'pending') {
-                    filtered = mappedRides.filter(r => r.status === 'pending');
-                } else if (activeTab === 'completed') {
-                    filtered = mappedRides.filter(r => r.status === 'completed' || r.status === 'cancelled');
-                }
-
-                setRides(filtered);
+                setRequestedRides(mappedRequested);
             } else {
-                Alert.alert("Error", response.data.message || "Failed to fetch rides");
-                setRides([]);
+                setRequestedRides([]);
             }
+
+            // Process offered rides (driver role)
+            if (offeredResponse.data.success) {
+                const fetchedOffered = offeredResponse.data.data.rides || [];
+                const mappedOffered = fetchedOffered.map(ride => {
+                    return {
+                        id: ride.id,
+                        pickup: ride.pickup_address || 'N/A',
+                        dropoff: ride.dropoff_address || 'N/A',
+                        time: ride.schedule_time || 'N/A',
+                        days: Array.isArray(ride.schedule_days) ? ride.schedule_days : (ride.schedule_days ? JSON.parse(ride.schedule_days) : []),
+                        status: ride.status || 'active', // active, completed, cancelled
+                        price: `$${parseFloat(ride.price || 0).toFixed(2)}`,
+                        available_seats: ride.available_seats || 1,
+                        request_count: ride.request_count || 0,
+                        originalRide: ride,
+                    };
+                });
+                setOfferedRides(mappedOffered);
+            } else {
+                setOfferedRides([]);
+            }
+
         } catch (error) {
             console.error("Fetch rides error:", error);
             const errorMessage = error.response?.data?.message || error.message || "Failed to fetch rides";
             Alert.alert("Error", errorMessage);
-            setRides([]);
+            setRequestedRides([]);
+            setOfferedRides([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -88,7 +107,7 @@ const MyRidesScreen = () => {
 
     const handleRefresh = () => {
         setRefreshing(true);
-        fetchRides();
+        fetchAllRides();
     };
 
     const handleAcceptRequest = async (rideId, requestId) => {
@@ -96,7 +115,7 @@ const MyRidesScreen = () => {
             const response = await ridesAPI.acceptRequest(rideId, requestId);
             if (response.data.success) {
                 Alert.alert("Success", "Ride request accepted!");
-                fetchRides(); // Refresh list
+                fetchAllRides(); // Refresh list
             } else {
                 Alert.alert("Error", response.data.message || "Failed to accept request");
             }
@@ -112,7 +131,7 @@ const MyRidesScreen = () => {
             const response = await ridesAPI.rejectRequest(rideId, requestId);
             if (response.data.success) {
                 Alert.alert("Success", "Ride request rejected");
-                fetchRides(); // Refresh list
+                fetchAllRides(); // Refresh list
             } else {
                 Alert.alert("Error", response.data.message || "Failed to reject request");
             }
@@ -137,7 +156,7 @@ const MyRidesScreen = () => {
                             const response = await ridesAPI.deleteRide(rideId);
                             if (response.data.success) {
                                 Alert.alert("Success", "Ride deleted successfully");
-                                fetchRides(); // Refresh list
+                                fetchAllRides(); // Refresh list
                             } else {
                                 Alert.alert("Error", response.data.message || "Failed to delete ride");
                             }
@@ -159,33 +178,23 @@ const MyRidesScreen = () => {
             {/* Tab Selector */}
             <View style={styles.tabContainer}>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === "active" && styles.tabActive]}
-                    onPress={() => setActiveTab("active")}
+                    style={[styles.tab, activeTab === "requested" && styles.tabActive]}
+                    onPress={() => setActiveTab("requested")}
                 >
                     <Text
-                        style={[styles.tabText, activeTab === "active" && styles.tabTextActive]}
+                        style={[styles.tabText, activeTab === "requested" && styles.tabTextActive]}
                     >
-                        Active
+                        Requested Rides
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === "pending" && styles.tabActive]}
-                    onPress={() => setActiveTab("pending")}
+                    style={[styles.tab, activeTab === "offered" && styles.tabActive]}
+                    onPress={() => setActiveTab("offered")}
                 >
                     <Text
-                        style={[styles.tabText, activeTab === "pending" && styles.tabTextActive]}
+                        style={[styles.tabText, activeTab === "offered" && styles.tabTextActive]}
                     >
-                        Pending
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === "completed" && styles.tabActive]}
-                    onPress={() => setActiveTab("completed")}
-                >
-                    <Text
-                        style={[styles.tabText, activeTab === "completed" && styles.tabTextActive]}
-                    >
-                        Completed
+                        Offered Rides
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -201,38 +210,68 @@ const MyRidesScreen = () => {
                         <ActivityIndicator size="large" color={Colors.primary} />
                         <Text style={styles.loadingText}>Loading rides...</Text>
                     </View>
-                ) : rides.length === 0 ? (
+                ) : (activeTab === "requested" ? requestedRides : offeredRides).length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>No {activeTab} rides</Text>
+                        <Text style={styles.emptyText}>
+                            No {activeTab === "requested" ? "requested" : "offered"} rides
+                        </Text>
                         <Text style={styles.emptySubtext}>
-                            {currentRole === 'driver' 
-                                ? 'Post a ride to get started!' 
-                                : 'Search for rides to request one!'}
+                            {activeTab === "requested"
+                                ? 'Search for rides to request one!'
+                                : 'Post a ride to get started!'}
                         </Text>
                     </View>
                 ) : (
-                    rides.map((ride) => (
-                        <Card key={ride.id} style={styles.rideCard}>
+                    (activeTab === "requested" ? requestedRides : offeredRides).map((ride) => (
+                        <Card key={activeTab === "requested" ? ride.request_id || ride.id : ride.id} style={styles.rideCard}>
                             <View style={styles.rideHeader}>
                                 <Text style={styles.rideTitle}>
                                     {ride.pickup} → {ride.dropoff}
                                 </Text>
+                                {/* Status badge - show for requested rides */}
+                                {activeTab === "requested" && (
                                 <View
                                     style={[
                                         styles.statusBadge,
-                                        ride.status === "active" && styles.statusBadgeActive,
-                                        ride.status === "accepted" && styles.statusBadgeActive,
+                                            ride.displayStatus === "active" && styles.statusBadgeActive,
+                                            ride.displayStatus === "pending" && styles.statusBadgePending,
+                                            ride.displayStatus === "completed" && styles.statusBadgeCompleted,
                                     ]}
                                 >
                                     <Text
                                         style={[
                                             styles.statusText,
-                                            (ride.status === "active" || ride.status === "accepted") && styles.statusTextActive,
+                                                ride.displayStatus === "active" && styles.statusTextActive,
+                                                ride.displayStatus === "pending" && styles.statusTextPending,
+                                                ride.displayStatus === "completed" && styles.statusTextCompleted,
+                                            ]}
+                                        >
+                                            {ride.status === 'accepted' ? 'Active' : 
+                                             ride.status === 'pending' ? 'Pending' : 
+                                             ride.status === 'rejected' ? 'Rejected' : 
+                                             ride.status === 'cancelled' ? 'Cancelled' : 
+                                             ride.status}
+                                        </Text>
+                                    </View>
+                                )}
+                                {/* Status badge for offered rides */}
+                                {activeTab === "offered" && (
+                                    <View
+                                        style={[
+                                            styles.statusBadge,
+                                            ride.status === "active" && styles.statusBadgeActive,
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.statusText,
+                                                ride.status === "active" && styles.statusTextActive,
                                         ]}
                                     >
                                         {ride.status}
                                     </Text>
                                 </View>
+                                )}
                             </View>
 
                             <View style={styles.rideInfo}>
@@ -247,7 +286,8 @@ const MyRidesScreen = () => {
                                 </Text>
                             </View>
 
-                            {currentRole === "passenger" && (
+                            {/* Show driver info for requested rides */}
+                            {activeTab === "requested" && (
                                 <View style={styles.rideInfo}>
                                     <Text style={styles.infoLabel}>Driver:</Text>
                                     <Text style={styles.infoValue}>
@@ -256,15 +296,16 @@ const MyRidesScreen = () => {
                                 </View>
                             )}
 
-                            {currentRole === "driver" && ride.request_count > 0 && (
+                            {/* Show request count for offered rides */}
+                            {activeTab === "offered" && ride.request_count > 0 && (
                                 <View style={styles.rideInfo}>
                                     <Text style={styles.infoLabel}>Requests:</Text>
                                     <Text style={styles.infoValue}>{ride.request_count} pending</Text>
                                 </View>
                             )}
 
-                            {/* Show ride requests for drivers - fetch details if needed */}
-                            {currentRole === "driver" && ride.request_count > 0 && (
+                            {/* Show ride requests hint for drivers */}
+                            {activeTab === "offered" && ride.request_count > 0 && (
                                 <View style={styles.requestsContainer}>
                                     <Text style={styles.requestsTitle}>
                                         {ride.request_count} Pending Request{ride.request_count > 1 ? 's' : ''}
@@ -277,7 +318,7 @@ const MyRidesScreen = () => {
 
                             <View style={styles.rideFooter}>
                                 <Text style={styles.price}>{ride.price}</Text>
-                                {currentRole === "driver" && (
+                                {activeTab === "offered" && (
                                     <TouchableOpacity 
                                         style={styles.deleteButton}
                                         onPress={() => handleDeleteRide(ride.id)}
@@ -366,13 +407,26 @@ const styles = StyleSheet.create({
     statusBadgeActive: {
         backgroundColor: Colors.secondary + "20",
     },
+    statusBadgePending: {
+        backgroundColor: "#FFA50020", // Orange tint
+    },
+    statusBadgeCompleted: {
+        backgroundColor: Colors.textSecondary + "20",
+    },
     statusText: {
         fontSize: 12,
         color: Colors.textSecondary,
         fontWeight: "600",
+        textTransform: "capitalize",
     },
     statusTextActive: {
         color: Colors.secondary,
+    },
+    statusTextPending: {
+        color: "#FFA500", // Orange
+    },
+    statusTextCompleted: {
+        color: Colors.textSecondary,
     },
     rideInfo: {
         flexDirection: "row",

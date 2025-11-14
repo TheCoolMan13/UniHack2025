@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 
-const MainScreen = () => {
+const MainPage = () => {
     return (
         <View style={styles.container}>
             <Text style={styles.header}>👾 Welcome to NibbleForce 👾</Text>
@@ -23,7 +23,7 @@ const MainScreen = () => {
     );
 };
 
-export default MainScreen;
+export default MainPage;
 
 const styles = StyleSheet.create({
     container: {

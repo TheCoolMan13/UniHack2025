@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
 import Header from "../../../components/common/Header";
 import Input from "../../../components/common/Input";
@@ -25,27 +25,61 @@ const SearchRideScreen = () => {
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState([]);
 
-    // Handle location selection from LocationSelectionScreen
+    // Initialize state from route params on mount
     useEffect(() => {
-        if (route.params?.selectedLocation) {
-            const { selectedLocation } = route.params;
-            if (selectedLocation.locationType === 'pickup') {
-                setPickupLocation(selectedLocation.address || "");
-                setPickupCoordinates({
-                    latitude: selectedLocation.latitude,
-                    longitude: selectedLocation.longitude,
-                });
-            } else if (selectedLocation.locationType === 'dropoff') {
-                setDropoffLocation(selectedLocation.address || "");
-                setDropoffCoordinates({
-                    latitude: selectedLocation.latitude,
-                    longitude: selectedLocation.longitude,
-                });
-            }
-            // Clear the params to avoid re-triggering
-            navigation.setParams({ selectedLocation: undefined });
+        if (route.params?.pickupLocation) {
+            setPickupLocation(route.params.pickupLocation);
         }
-    }, [route.params?.selectedLocation]);
+        if (route.params?.dropoffLocation) {
+            setDropoffLocation(route.params.dropoffLocation);
+        }
+        if (route.params?.pickupCoordinates) {
+            setPickupCoordinates(route.params.pickupCoordinates);
+        }
+        if (route.params?.dropoffCoordinates) {
+            setDropoffCoordinates(route.params.dropoffCoordinates);
+        }
+    }, []);
+
+    // Handle location selection from LocationSelectionScreen
+    useFocusEffect(
+        React.useCallback(() => {
+            const selectedLocation = route.params?.selectedLocation;
+            if (selectedLocation && selectedLocation.locationType) {
+                if (selectedLocation.locationType === 'pickup') {
+                    const address = selectedLocation.address || "";
+                    const coords = {
+                        latitude: selectedLocation.latitude,
+                        longitude: selectedLocation.longitude,
+                    };
+                    setPickupLocation(address);
+                    setPickupCoordinates(coords);
+                    // Store in route params to persist - preserve existing params
+                    navigation.setParams({
+                        ...route.params, // Preserve existing params (like dropoffLocation)
+                        pickupLocation: address,
+                        pickupCoordinates: coords,
+                        selectedLocation: undefined, // Clear the temp param
+                    });
+                } else if (selectedLocation.locationType === 'dropoff') {
+                    const address = selectedLocation.address || "";
+                    const coords = {
+                        latitude: selectedLocation.latitude,
+                        longitude: selectedLocation.longitude,
+                    };
+                    setDropoffLocation(address);
+                    setDropoffCoordinates(coords);
+                    // Store in route params to persist - preserve existing params
+                    navigation.setParams({
+                        ...route.params, // Preserve existing params (like pickupLocation)
+                        dropoffLocation: address,
+                        dropoffCoordinates: coords,
+                        selectedLocation: undefined, // Clear the temp param
+                    });
+                }
+            }
+        }, [route.params, navigation])
+    );
 
     const weekDays = [
         { label: "Mon", value: "monday" },

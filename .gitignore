@@ -1,0 +1,44 @@
+# Root .gitignore for Car Sharing App
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Build outputs (if any at root)
+dist/
+build/
+*.tgz
+

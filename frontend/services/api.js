@@ -78,6 +78,7 @@ export const ridesAPI = {
     requestRide: (rideId) => api.post(`/rides/${rideId}/request`),
     
     // Common endpoints
+    getActiveRides: () => api.get("/rides/active"), // Get all active rides for map
     getRideDetails: (rideId) => api.get(`/rides/${rideId}`),
     acceptRequest: (rideId, requestId) => api.post(`/rides/${rideId}/accept`, { requestId }),
     rejectRequest: (rideId, requestId) => api.post(`/rides/${rideId}/reject`, { requestId }),

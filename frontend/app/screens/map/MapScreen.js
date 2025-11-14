@@ -1,10 +1,12 @@
 import * as Location from "expo-location";
 import React, { useEffect, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import Card from "../../../components/common/Card";
 import Header from "../../../components/common/Header";
 import { Colors } from "../../../constants/colors";
+import { ridesAPI } from "../../../services/api";
+import { MAP_CONFIG } from "../../../constants/config";
 
 /**
  * Map Screen
@@ -14,16 +16,44 @@ import { Colors } from "../../../constants/colors";
 const MapScreen = () => {
     const [location, setLocation] = useState(null);
     const [region, setRegion] = useState({
-        latitude: 37.78825,
-        longitude: -122.4324,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
+        latitude: MAP_CONFIG.DEFAULT_LATITUDE,
+        longitude: MAP_CONFIG.DEFAULT_LONGITUDE,
+        latitudeDelta: MAP_CONFIG.DEFAULT_LATITUDE_DELTA,
+        longitudeDelta: MAP_CONFIG.DEFAULT_LONGITUDE_DELTA,
     });
     const [hasPermission, setHasPermission] = useState(false);
+    const [rides, setRides] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedRide, setSelectedRide] = useState(null);
 
     useEffect(() => {
         requestLocationPermission();
+        fetchActiveRides();
     }, []);
+
+    /**
+     * Fetch active rides from API
+     */
+    const fetchActiveRides = async () => {
+        try {
+            setLoading(true);
+            const response = await ridesAPI.getActiveRides();
+            
+            if (response.data.success) {
+                const fetchedRides = response.data.data.rides || [];
+                setRides(fetchedRides);
+            } else {
+                console.error("Failed to fetch rides:", response.data.message);
+                setRides([]);
+            }
+        } catch (error) {
+            console.error("Fetch active rides error:", error);
+            // Don't show alert for map - just log error
+            setRides([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     /**
      * Request location permissions and get current location
@@ -72,23 +102,12 @@ const MapScreen = () => {
         }
     };
 
-    // Mock ride data for demonstration
-    const mockRides = [
-        {
-            id: "1",
-            pickup: { latitude: 37.78825, longitude: -122.4324 },
-            dropoff: { latitude: 37.78425, longitude: -122.4094 },
-            driver: "John Doe",
-            time: "7:30 AM",
-        },
-        {
-            id: "2",
-            pickup: { latitude: 37.79025, longitude: -122.4304 },
-            dropoff: { latitude: 37.78225, longitude: -122.4114 },
-            driver: "Jane Smith",
-            time: "8:00 AM",
-        },
-    ];
+    /**
+     * Handle marker press to show ride details
+     */
+    const handleMarkerPress = (ride) => {
+        setSelectedRide(ride);
+    };
 
     return (
         <View style={styles.container}>
@@ -109,27 +128,41 @@ const MapScreen = () => {
                     />
                 )}
 
-                {/* Mock ride markers */}
-                {mockRides.map((ride) => (
-                    <React.Fragment key={ride.id}>
-                        <Marker
-                            coordinate={ride.pickup}
-                            title={`Pickup - ${ride.driver}`}
-                            description={ride.time}
-                            pinColor={Colors.secondary}
-                        />
-                        <Marker
-                            coordinate={ride.dropoff}
-                            title={`Dropoff - ${ride.driver}`}
-                            pinColor={Colors.error}
-                        />
-                        <Polyline
-                            coordinates={[ride.pickup, ride.dropoff]}
-                            strokeColor={Colors.primary}
-                            strokeWidth={3}
-                        />
-                    </React.Fragment>
-                ))}
+                {/* Real ride markers */}
+                {rides.map((ride) => {
+                    const pickupCoord = {
+                        latitude: ride.pickup_latitude,
+                        longitude: ride.pickup_longitude,
+                    };
+                    const dropoffCoord = {
+                        latitude: ride.dropoff_latitude,
+                        longitude: ride.dropoff_longitude,
+                    };
+
+                    return (
+                        <React.Fragment key={ride.id}>
+                            <Marker
+                                coordinate={pickupCoord}
+                                title={`Pickup - ${ride.driver_name || 'Driver'}`}
+                                description={`${ride.schedule_time} | $${ride.price.toFixed(2)}`}
+                                pinColor={Colors.secondary}
+                                onPress={() => handleMarkerPress(ride)}
+                            />
+                            <Marker
+                                coordinate={dropoffCoord}
+                                title={`Dropoff - ${ride.driver_name || 'Driver'}`}
+                                description={`${ride.schedule_time} | $${ride.price.toFixed(2)}`}
+                                pinColor={Colors.error}
+                                onPress={() => handleMarkerPress(ride)}
+                            />
+                            <Polyline
+                                coordinates={[pickupCoord, dropoffCoord]}
+                                strokeColor={MAP_CONFIG.ROUTE_COLOR}
+                                strokeWidth={MAP_CONFIG.ROUTE_WIDTH}
+                            />
+                        </React.Fragment>
+                    );
+                })}
             </MapView>
 
             {/* Map Controls */}
@@ -142,10 +175,51 @@ const MapScreen = () => {
             {/* Info Card */}
             <Card style={styles.infoCard}>
                 <Text style={styles.infoTitle}>Available Rides</Text>
-                <Text style={styles.infoText}>
-                    {mockRides.length} rides available in your area
-                </Text>
+                {loading ? (
+                    <View style={styles.loadingRow}>
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <Text style={styles.infoText}>Loading rides...</Text>
+                    </View>
+                ) : (
+                    <Text style={styles.infoText}>
+                        {rides.length} {rides.length === 1 ? 'ride' : 'rides'} available
+                    </Text>
+                )}
             </Card>
+
+            {/* Selected Ride Details Card */}
+            {selectedRide && (
+                <Card style={styles.rideDetailsCard}>
+                    <TouchableOpacity
+                        style={styles.closeButton}
+                        onPress={() => setSelectedRide(null)}
+                    >
+                        <Text style={styles.closeButtonText}>✕</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.rideDetailsTitle}>
+                        {selectedRide.driver_name || 'Driver'}
+                    </Text>
+                    <Text style={styles.rideDetailsRoute}>
+                        {selectedRide.pickup_address} → {selectedRide.dropoff_address}
+                    </Text>
+                    <View style={styles.rideDetailsInfo}>
+                        <Text style={styles.rideDetailsText}>
+                            ⏰ {selectedRide.schedule_time}
+                        </Text>
+                        <Text style={styles.rideDetailsText}>
+                            💰 ${selectedRide.price.toFixed(2)}
+                        </Text>
+                        <Text style={styles.rideDetailsText}>
+                            🪑 {selectedRide.available_seats} seat{selectedRide.available_seats > 1 ? 's' : ''}
+                        </Text>
+                    </View>
+                    {selectedRide.driver_rating > 0 && (
+                        <Text style={styles.rideDetailsRating}>
+                            ⭐ {selectedRide.driver_rating}
+                        </Text>
+                    )}
+                </Card>
+            )}
         </View>
     );
 };
@@ -197,6 +271,63 @@ const styles = StyleSheet.create({
     infoText: {
         fontSize: 14,
         color: Colors.textSecondary,
+    },
+    loadingRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    rideDetailsCard: {
+        position: "absolute",
+        bottom: 100,
+        left: 16,
+        right: 16,
+        maxHeight: 200,
+    },
+    closeButton: {
+        position: "absolute",
+        top: 8,
+        right: 8,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: Colors.surface,
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1,
+    },
+    closeButtonText: {
+        fontSize: 16,
+        color: Colors.textSecondary,
+        fontWeight: "bold",
+    },
+    rideDetailsTitle: {
+        fontSize: 18,
+        fontWeight: "bold",
+        color: Colors.textPrimary,
+        marginBottom: 4,
+        paddingRight: 32,
+    },
+    rideDetailsRoute: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginBottom: 8,
+    },
+    rideDetailsInfo: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 12,
+        marginBottom: 4,
+    },
+    rideDetailsText: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+    },
+    rideDetailsRating: {
+        fontSize: 12,
+        color: Colors.secondary,
+        fontWeight: "600",
+        marginTop: 4,
     },
 });
 

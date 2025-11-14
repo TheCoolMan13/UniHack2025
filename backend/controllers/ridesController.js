@@ -355,6 +355,46 @@ const deleteRide = async (req, res) => {
 };
 
 /**
+ * @desc    Get all active rides (for map display)
+ * @route   GET /api/rides/active
+ * @access  Private
+ */
+const getActiveRides = async (req, res) => {
+  try {
+    // Get all active rides
+    const [allRides] = await db.execute(
+      `SELECT r.*, u.name as driver_name, u.rating as driver_rating
+       FROM rides r
+       JOIN users u ON r.driver_id = u.id
+       WHERE r.status = 'active' AND r.available_seats > 0
+       ORDER BY r.created_at DESC`
+    );
+
+    // Parse schedule_days for each ride
+    const rides = allRides.map(ride => ({
+      ...ride,
+      schedule_days: JSON.parse(ride.schedule_days),
+      pickup_latitude: parseFloat(ride.pickup_latitude),
+      pickup_longitude: parseFloat(ride.pickup_longitude),
+      dropoff_latitude: parseFloat(ride.dropoff_latitude),
+      dropoff_longitude: parseFloat(ride.dropoff_longitude),
+      price: parseFloat(ride.price)
+    }));
+
+    res.json({
+      success: true,
+      data: { rides }
+    });
+  } catch (error) {
+    console.error('Get active rides error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching active rides'
+    });
+  }
+};
+
+/**
  * @desc    Search for matching rides
  * @route   POST /api/rides/search
  * @access  Private
@@ -688,6 +728,7 @@ const rejectRequest = async (req, res) => {
 module.exports = {
   createRide,
   getMyRides,
+  getActiveRides,
   getRideDetails,
   updateRide,
   deleteRide,

@@ -41,6 +41,13 @@ router.get(
 );
 
 /**
+ * @route   GET /api/rides/active
+ * @desc    Get all active rides (for map display)
+ * @access  Private
+ */
+router.get('/active', authenticate, ridesController.getActiveRides);
+
+/**
  * @route   GET /api/rides/:id
  * @desc    Get ride details
  * @access  Private

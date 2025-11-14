@@ -199,14 +199,21 @@ const LocationSelectionScreen = () => {
             return;
         }
 
-        // Return selected location to the screen that opened this one
-        const screenToReturnTo = returnScreen || "SearchRide";
-        navigation.navigate(screenToReturnTo, {
-            selectedLocation: {
-                ...selectedLocation,
-                address: address,
-                locationType: locationType,
+        // Prepare the location data to pass back
+        const locationData = {
+            ...selectedLocation,
+            address: address,
+            locationType: locationType,
+        };
+
+        // Simply go back and pass the location through route params
+        // The previous screen will handle it via useFocusEffect
+        navigation.navigate({
+            name: returnScreen || "SearchRide",
+            params: {
+                selectedLocation: locationData,
             },
+            merge: true,
         });
     };
 

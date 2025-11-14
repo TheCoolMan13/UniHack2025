@@ -206,13 +206,33 @@ const LocationSelectionScreen = () => {
             locationType: locationType,
         };
 
+        // Get existing locations from route params to preserve them
+        const existingPickupLocation = route.params?.existingPickupLocation || "";
+        const existingPickupCoordinates = route.params?.existingPickupCoordinates || null;
+        const existingDropoffLocation = route.params?.existingDropoffLocation || "";
+        const existingDropoffCoordinates = route.params?.existingDropoffCoordinates || null;
+
+        // Prepare params to pass back - preserve the location that wasn't changed
+        const returnParams = {
+            selectedLocation: locationData,
+        };
+
+        // If we're selecting pickup, preserve dropoff
+        if (locationType === 'pickup') {
+            returnParams.dropoffLocation = existingDropoffLocation;
+            returnParams.dropoffCoordinates = existingDropoffCoordinates;
+        } 
+        // If we're selecting dropoff, preserve pickup
+        else if (locationType === 'dropoff') {
+            returnParams.pickupLocation = existingPickupLocation;
+            returnParams.pickupCoordinates = existingPickupCoordinates;
+        }
+
         // Simply go back and pass the location through route params
         // The previous screen will handle it via useFocusEffect
         navigation.navigate({
             name: returnScreen || "SearchRide",
-            params: {
-                selectedLocation: locationData,
-            },
+            params: returnParams,
             merge: true,
         });
     };
@@ -308,12 +328,9 @@ const LocationSelectionScreen = () => {
                 showsMyLocationButton={false}
             />
 
-            {/* Fixed Center Pin Indicator (like Uber) */}
+            {/* Fixed Center Dot Indicator (Red Dot) */}
             <View style={styles.centerPinContainer} pointerEvents="none">
-                <View style={styles.centerPin}>
-                    <View style={styles.centerPinDot} />
-                    <View style={styles.centerPinShadow} />
-                </View>
+                <View style={styles.centerDot} />
             </View>
 
             {/* Selected Address Display */}
@@ -448,38 +465,19 @@ const styles = StyleSheet.create({
         position: "absolute",
         top: "50%",
         left: "50%",
-        marginLeft: -15,
-        marginTop: -30,
+        marginLeft: -8,
+        marginTop: -8,
         alignItems: "center",
         justifyContent: "center",
         zIndex: 100,
     },
-    centerPin: {
-        width: 30,
-        height: 30,
-        alignItems: "center",
-        justifyContent: "flex-start",
-    },
-    centerPinDot: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: Colors.primary,
+    centerDot: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: "#EA4335", // Red color
         borderWidth: 3,
         borderColor: Colors.backgroundLight,
-        shadowColor: Colors.shadow,
-        shadowOpacity: 0.3,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    centerPinShadow: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: Colors.shadow,
-        opacity: 0.2,
-        marginTop: -4,
     },
     addressContainer: {
         position: "absolute",

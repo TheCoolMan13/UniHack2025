@@ -6,6 +6,7 @@ import Header from "../../../components/common/Header";
 import Input from "../../../components/common/Input";
 import Button from "../../../components/common/Button";
 import Card from "../../../components/common/Card";
+import TimePicker from "../../../components/common/TimePicker";
 import { ridesAPI } from "../../../services/api";
 
 /**
@@ -24,6 +25,20 @@ const SearchRideScreen = () => {
     const [days, setDays] = useState([]);
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState([]);
+    
+    // Use refs to track current values for use in callbacks
+    const pickupLocationRef = useRef(pickupLocation);
+    const dropoffLocationRef = useRef(dropoffLocation);
+    const pickupCoordinatesRef = useRef(pickupCoordinates);
+    const dropoffCoordinatesRef = useRef(dropoffCoordinates);
+    
+    // Update refs when state changes
+    useEffect(() => {
+        pickupLocationRef.current = pickupLocation;
+        dropoffLocationRef.current = dropoffLocation;
+        pickupCoordinatesRef.current = pickupCoordinates;
+        dropoffCoordinatesRef.current = dropoffCoordinates;
+    }, [pickupLocation, dropoffLocation, pickupCoordinates, dropoffCoordinates]);
 
     // Initialize state from route params on mount
     useEffect(() => {
@@ -54,11 +69,21 @@ const SearchRideScreen = () => {
                     };
                     setPickupLocation(address);
                     setPickupCoordinates(coords);
-                    // Store in route params to persist - preserve existing params
+                    
+                    // Restore preserved dropoff from route params if it exists
+                    if (route.params?.dropoffLocation) {
+                        setDropoffLocation(route.params.dropoffLocation);
+                    }
+                    if (route.params?.dropoffCoordinates) {
+                        setDropoffCoordinates(route.params.dropoffCoordinates);
+                    }
+                    
+                    // Store in route params to persist
                     navigation.setParams({
-                        ...route.params, // Preserve existing params (like dropoffLocation)
                         pickupLocation: address,
                         pickupCoordinates: coords,
+                        dropoffLocation: route.params?.dropoffLocation || dropoffLocationRef.current || "",
+                        dropoffCoordinates: route.params?.dropoffCoordinates || dropoffCoordinatesRef.current || null,
                         selectedLocation: undefined, // Clear the temp param
                     });
                 } else if (selectedLocation.locationType === 'dropoff') {
@@ -69,16 +94,26 @@ const SearchRideScreen = () => {
                     };
                     setDropoffLocation(address);
                     setDropoffCoordinates(coords);
-                    // Store in route params to persist - preserve existing params
+                    
+                    // Restore preserved pickup from route params if it exists
+                    if (route.params?.pickupLocation) {
+                        setPickupLocation(route.params.pickupLocation);
+                    }
+                    if (route.params?.pickupCoordinates) {
+                        setPickupCoordinates(route.params.pickupCoordinates);
+                    }
+                    
+                    // Store in route params to persist
                     navigation.setParams({
-                        ...route.params, // Preserve existing params (like pickupLocation)
                         dropoffLocation: address,
                         dropoffCoordinates: coords,
+                        pickupLocation: route.params?.pickupLocation || pickupLocationRef.current || "",
+                        pickupCoordinates: route.params?.pickupCoordinates || pickupCoordinatesRef.current || null,
                         selectedLocation: undefined, // Clear the temp param
                     });
                 }
             }
-        }, [route.params, navigation])
+        }, [route.params?.selectedLocation, route.params?.pickupLocation, route.params?.dropoffLocation, route.params?.pickupCoordinates, route.params?.dropoffCoordinates, navigation])
     );
 
     const weekDays = [
@@ -160,10 +195,25 @@ const SearchRideScreen = () => {
 
                     <TouchableOpacity
                         onPress={() => {
+                            // Use refs to get latest values
+                            const currentPickupCoords = pickupCoordinatesRef.current;
+                            const currentPickupLoc = pickupLocationRef.current;
+                            const currentDropoffCoords = dropoffCoordinatesRef.current;
+                            const currentDropoffLoc = dropoffLocationRef.current;
+                            
                             navigation.navigate("LocationSelection", {
                                 locationType: "pickup",
-                                initialLocation: pickupCoordinates,
+                                initialLocation: currentPickupCoords ? {
+                                    latitude: currentPickupCoords.latitude,
+                                    longitude: currentPickupCoords.longitude,
+                                    address: currentPickupLoc,
+                                } : null,
                                 returnScreen: "SearchRide",
+                                // Preserve existing locations using refs
+                                existingPickupLocation: currentPickupLoc,
+                                existingPickupCoordinates: currentPickupCoords,
+                                existingDropoffLocation: currentDropoffLoc,
+                                existingDropoffCoordinates: currentDropoffCoords,
                             });
                         }}
                     >
@@ -179,10 +229,25 @@ const SearchRideScreen = () => {
 
                     <TouchableOpacity
                         onPress={() => {
+                            // Use refs to get latest values
+                            const currentPickupCoords = pickupCoordinatesRef.current;
+                            const currentPickupLoc = pickupLocationRef.current;
+                            const currentDropoffCoords = dropoffCoordinatesRef.current;
+                            const currentDropoffLoc = dropoffLocationRef.current;
+                            
                             navigation.navigate("LocationSelection", {
                                 locationType: "dropoff",
-                                initialLocation: dropoffCoordinates,
+                                initialLocation: currentDropoffCoords ? {
+                                    latitude: currentDropoffCoords.latitude,
+                                    longitude: currentDropoffCoords.longitude,
+                                    address: currentDropoffLoc,
+                                } : null,
                                 returnScreen: "SearchRide",
+                                // Preserve existing locations using refs
+                                existingPickupLocation: currentPickupLoc,
+                                existingPickupCoordinates: currentPickupCoords,
+                                existingDropoffLocation: currentDropoffLoc,
+                                existingDropoffCoordinates: currentDropoffCoords,
                             });
                         }}
                     >
@@ -200,11 +265,11 @@ const SearchRideScreen = () => {
                 <Card style={styles.card}>
                     <Text style={styles.sectionTitle}>Schedule</Text>
 
-                    <Input
+                    <TimePicker
                         label="Time"
                         value={time}
-                        onChangeText={setTime}
-                        placeholder="e.g., 7:30 AM"
+                        onChange={setTime}
+                        placeholder="Select time"
                     />
 
                     <Text style={styles.label}>Days of Week</Text>

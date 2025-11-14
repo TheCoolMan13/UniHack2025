@@ -8,6 +8,7 @@ import Button from "../../../components/common/Button";
 import Card from "../../../components/common/Card";
 import TimePicker from "../../../components/common/TimePicker";
 import { ridesAPI } from "../../../services/api";
+import { getLocationSelectionResult } from "../map/LocationSelectionScreen";
 
 /**
  * Search Ride Screen
@@ -56,10 +57,74 @@ const SearchRideScreen = () => {
         }
     }, []);
 
+    // Also listen for params changes (not just on focus)
+    useEffect(() => {
+        // Check for location selection result from temporary storage
+        const locationResult = getLocationSelectionResult();
+        const selectedLocation = locationResult?.selectedLocation || route.params?.selectedLocation;
+        
+        if (selectedLocation && selectedLocation.locationType) {
+            if (selectedLocation.locationType === 'pickup') {
+                const address = selectedLocation.address || "";
+                const coords = {
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                };
+                setPickupLocation(address);
+                setPickupCoordinates(coords);
+                
+                // Restore preserved dropoff from route params if it exists
+                if (route.params?.dropoffLocation) {
+                    setDropoffLocation(route.params.dropoffLocation);
+                }
+                if (route.params?.dropoffCoordinates) {
+                    setDropoffCoordinates(route.params.dropoffCoordinates);
+                }
+                
+                // Store in route params to persist
+                navigation.setParams({
+                    pickupLocation: address,
+                    pickupCoordinates: coords,
+                    dropoffLocation: route.params?.dropoffLocation || dropoffLocationRef.current || "",
+                    dropoffCoordinates: route.params?.dropoffCoordinates || dropoffCoordinatesRef.current || null,
+                    selectedLocation: undefined, // Clear the temp param
+                });
+            } else if (selectedLocation.locationType === 'dropoff') {
+                const address = selectedLocation.address || "";
+                const coords = {
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                };
+                setDropoffLocation(address);
+                setDropoffCoordinates(coords);
+                
+                // Restore preserved pickup from route params if it exists
+                if (route.params?.pickupLocation) {
+                    setPickupLocation(route.params.pickupLocation);
+                }
+                if (route.params?.pickupCoordinates) {
+                    setPickupCoordinates(route.params.pickupCoordinates);
+                }
+                
+                // Store in route params to persist
+                navigation.setParams({
+                    dropoffLocation: address,
+                    dropoffCoordinates: coords,
+                    pickupLocation: route.params?.pickupLocation || pickupLocationRef.current || "",
+                    pickupCoordinates: route.params?.pickupCoordinates || pickupCoordinatesRef.current || null,
+                    selectedLocation: undefined, // Clear the temp param
+                });
+            }
+        }
+    }, [route.params?.selectedLocation, route.params?.pickupLocation, route.params?.dropoffLocation, route.params?.pickupCoordinates, route.params?.dropoffCoordinates, navigation]);
+
     // Handle location selection from LocationSelectionScreen
     useFocusEffect(
         React.useCallback(() => {
-            const selectedLocation = route.params?.selectedLocation;
+            // Check for location selection result from temporary storage
+            const locationResult = getLocationSelectionResult();
+            const selectedLocation = locationResult?.selectedLocation || route.params?.selectedLocation;
+            
             if (selectedLocation && selectedLocation.locationType) {
                 if (selectedLocation.locationType === 'pickup') {
                     const address = selectedLocation.address || "";
@@ -70,11 +135,15 @@ const SearchRideScreen = () => {
                     setPickupLocation(address);
                     setPickupCoordinates(coords);
                     
-                    // Restore preserved dropoff from route params if it exists
-                    if (route.params?.dropoffLocation) {
+                    // Restore preserved dropoff from locationResult or route params
+                    if (locationResult?.dropoffLocation) {
+                        setDropoffLocation(locationResult.dropoffLocation);
+                    } else if (route.params?.dropoffLocation) {
                         setDropoffLocation(route.params.dropoffLocation);
                     }
-                    if (route.params?.dropoffCoordinates) {
+                    if (locationResult?.dropoffCoordinates) {
+                        setDropoffCoordinates(locationResult.dropoffCoordinates);
+                    } else if (route.params?.dropoffCoordinates) {
                         setDropoffCoordinates(route.params.dropoffCoordinates);
                     }
                     
@@ -82,8 +151,8 @@ const SearchRideScreen = () => {
                     navigation.setParams({
                         pickupLocation: address,
                         pickupCoordinates: coords,
-                        dropoffLocation: route.params?.dropoffLocation || dropoffLocationRef.current || "",
-                        dropoffCoordinates: route.params?.dropoffCoordinates || dropoffCoordinatesRef.current || null,
+                        dropoffLocation: locationResult?.dropoffLocation || route.params?.dropoffLocation || dropoffLocationRef.current || "",
+                        dropoffCoordinates: locationResult?.dropoffCoordinates || route.params?.dropoffCoordinates || dropoffCoordinatesRef.current || null,
                         selectedLocation: undefined, // Clear the temp param
                     });
                 } else if (selectedLocation.locationType === 'dropoff') {
@@ -95,11 +164,15 @@ const SearchRideScreen = () => {
                     setDropoffLocation(address);
                     setDropoffCoordinates(coords);
                     
-                    // Restore preserved pickup from route params if it exists
-                    if (route.params?.pickupLocation) {
+                    // Restore preserved pickup from locationResult or route params
+                    if (locationResult?.pickupLocation) {
+                        setPickupLocation(locationResult.pickupLocation);
+                    } else if (route.params?.pickupLocation) {
                         setPickupLocation(route.params.pickupLocation);
                     }
-                    if (route.params?.pickupCoordinates) {
+                    if (locationResult?.pickupCoordinates) {
+                        setPickupCoordinates(locationResult.pickupCoordinates);
+                    } else if (route.params?.pickupCoordinates) {
                         setPickupCoordinates(route.params.pickupCoordinates);
                     }
                     

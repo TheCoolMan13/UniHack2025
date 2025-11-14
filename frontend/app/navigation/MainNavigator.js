@@ -2,6 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../../constants/colors";
 
 // Screens
@@ -35,9 +36,7 @@ const HomeStack = () => {
                 component={PostRideScreen}
                 options={{
                     presentation: "modal",
-                    headerShown: true,
-                    headerStyle: { backgroundColor: Colors.backgroundLight },
-                    headerTitleStyle: { color: Colors.textPrimary },
+                    headerShown: false,
                 }}
             />
             <Stack.Screen
@@ -45,9 +44,7 @@ const HomeStack = () => {
                 component={SearchRideScreen}
                 options={{
                     presentation: "modal",
-                    headerShown: true,
-                    headerStyle: { backgroundColor: Colors.backgroundLight },
-                    headerTitleStyle: { color: Colors.textPrimary },
+                    headerShown: false,
                 }}
             />
             <Stack.Screen
@@ -55,9 +52,7 @@ const HomeStack = () => {
                 component={DeliverPackageScreen}
                 options={{
                     presentation: "modal",
-                    headerShown: true,
-                    headerStyle: { backgroundColor: Colors.backgroundLight },
-                    headerTitleStyle: { color: Colors.textPrimary },
+                    headerShown: false,
                 }}
             />
             <Stack.Screen
@@ -77,6 +72,8 @@ const HomeStack = () => {
  * Bottom tab navigation for authenticated users
  */
 const MainNavigator = () => {
+    const insets = useSafeAreaInsets();
+    
     return (
         <Tab.Navigator
             initialRouteName="Home"
@@ -102,9 +99,9 @@ const MainNavigator = () => {
                 tabBarStyle: {
                     backgroundColor: Colors.backgroundLight,
                     borderTopColor: Colors.border,
-                    paddingBottom: 5,
+                    paddingBottom: Math.max(insets.bottom, 5),
                     paddingTop: 5,
-                    height: 60,
+                    height: 60 + Math.max(insets.bottom, 0),
                 },
                 headerShown: false,
             })}

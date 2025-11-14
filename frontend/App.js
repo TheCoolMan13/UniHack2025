@@ -1,4 +1,6 @@
 import React from "react";
+import { StatusBar } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import AppNavigator from "./app/navigation/AppNavigator";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -9,9 +11,12 @@ import { AuthProvider } from "./context/AuthContext";
 const App = () => {
     console.log("App.js is being called");
     return (
-        <AuthProvider>
-            <AppNavigator />
-        </AuthProvider>
+        <SafeAreaProvider>
+            <StatusBar barStyle="light-content" backgroundColor="#000000" />
+            <AuthProvider>
+                <AppNavigator />
+            </AuthProvider>
+        </SafeAreaProvider>
     );
 };
 

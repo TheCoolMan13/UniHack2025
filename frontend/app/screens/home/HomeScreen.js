@@ -1,7 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
 import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import SearchBar from "../../../components/common/SearchBar";
 import ServiceButton from "../../../components/common/ServiceButton";
 import { Colors } from "../../../constants/colors";
@@ -16,6 +16,7 @@ const HomeScreen = () => {
   const navigation = useNavigation();
   const { user, currentRole } = useAuth();
   const [currentRoleState] = useState(currentRole || 'passenger'); // 'driver' or 'passenger'
+  const insets = useSafeAreaInsets();
 
   const handleSearchPress = () => {
     navigation.navigate("SearchRide");
@@ -61,10 +62,12 @@ const HomeScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.background} translucent={false} />
-      {/* Header with Logo */}
-      <View style={styles.header}>
+    <View style={styles.wrapper}>
+      <StatusBar barStyle="light-content" backgroundColor="#000000" translucent={false} />
+      <View style={[styles.statusBarArea, { height: insets.top }]} />
+      <SafeAreaView style={styles.container} edges={[]}>
+        {/* Header with Logo */}
+        <View style={styles.header}>
         <Text style={styles.logo}>NibbleForce</Text>
         <TouchableOpacity
           style={styles.profileButton}
@@ -172,13 +175,22 @@ const HomeScreen = () => {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 export default HomeScreen;
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  statusBarArea: {
+    backgroundColor: "#000000",
+    height: 0, // Will be set dynamically
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,

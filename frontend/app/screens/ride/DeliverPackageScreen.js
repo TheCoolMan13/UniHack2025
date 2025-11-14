@@ -1,6 +1,5 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
 import Header from "../../../components/common/Header";
@@ -13,7 +12,7 @@ const DeliverPackageScreen = () => {
   const navigation = useNavigation();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       <Header title="Deliver a Package" showBack={true} />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
@@ -26,7 +25,7 @@ const DeliverPackageScreen = () => {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

@@ -3,10 +3,19 @@ import { View, StyleSheet, Text, TouchableOpacity, Alert, TextInput, ScrollView 
 import { SafeAreaView } from "react-native-safe-area-context";
 import MapView from "react-native-maps";
 import * as Location from "expo-location";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, CommonActions } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
 import { geocodeAddress, reverseGeocode, searchAddressSuggestions } from "../../../services/geocoding";
 import Button from "../../../components/common/Button";
+
+// Temporary storage for location selection results
+// This allows us to pass data back when going back from a modal
+let locationSelectionResult = null;
+export const getLocationSelectionResult = () => {
+    const result = locationSelectionResult;
+    locationSelectionResult = null; // Clear after reading
+    return result;
+};
 
 /**
  * Location Selection Screen
@@ -212,29 +221,29 @@ const LocationSelectionScreen = () => {
         const existingDropoffLocation = route.params?.existingDropoffLocation || "";
         const existingDropoffCoordinates = route.params?.existingDropoffCoordinates || null;
 
-        // Prepare params to pass back - preserve the location that wasn't changed
-        const returnParams = {
+        const returnScreenName = returnScreen || "SearchRide";
+        
+        // Prepare params with selected location and preserved locations
+        const finalParams = {
             selectedLocation: locationData,
         };
 
         // If we're selecting pickup, preserve dropoff
         if (locationType === 'pickup') {
-            returnParams.dropoffLocation = existingDropoffLocation;
-            returnParams.dropoffCoordinates = existingDropoffCoordinates;
+            finalParams.dropoffLocation = existingDropoffLocation;
+            finalParams.dropoffCoordinates = existingDropoffCoordinates;
         } 
         // If we're selecting dropoff, preserve pickup
         else if (locationType === 'dropoff') {
-            returnParams.pickupLocation = existingPickupLocation;
-            returnParams.pickupCoordinates = existingPickupCoordinates;
+            finalParams.pickupLocation = existingPickupLocation;
+            finalParams.pickupCoordinates = existingPickupCoordinates;
         }
-
-        // Simply go back and pass the location through route params
-        // The previous screen will handle it via useFocusEffect
-        navigation.navigate({
-            name: returnScreen || "SearchRide",
-            params: returnParams,
-            merge: true,
-        });
+        
+        // Store the location data temporarily
+        locationSelectionResult = finalParams;
+        
+        // Simply go back - the return screen will check for the stored data
+        navigation.goBack();
     };
 
     const centerOnUser = async () => {
@@ -261,7 +270,7 @@ const LocationSelectionScreen = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={[]}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>

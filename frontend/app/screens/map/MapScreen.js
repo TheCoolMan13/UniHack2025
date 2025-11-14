@@ -152,7 +152,7 @@ const MapScreen = () => {
     if (locationLoading && !region) {
         return (
             <View style={styles.container}>
-                <Header title="Map" showBack={false} />
+                <Header title="Map" showBack={false} showStatusBar={true} />
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={Colors.primary} />
                     <Text style={styles.loadingText}>Getting your location...</Text>
@@ -171,7 +171,7 @@ const MapScreen = () => {
 
     return (
         <View style={styles.container}>
-            <Header title="Map" showBack={false} />
+            <Header title="Map" showBack={false} showStatusBar={true} />
             <MapView
                 ref={mapRef}
                 style={styles.map}

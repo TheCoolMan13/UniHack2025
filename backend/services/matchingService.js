@@ -1,8 +1,9 @@
 /**
  * Route Matching Service
  * Implements algorithm to match passenger routes with driver routes
- * (Same logic as frontend, but for server-side matching)
+ * Uses real route calculation from Google Maps Directions API for accurate matching
  */
+const routeService = require('./routeService');
 
 /**
  * Calculate distance between two coordinates (Haversine formula)
@@ -90,68 +91,196 @@ const isDayMatch = (days1, days2) => {
 };
 
 /**
- * Match passenger route with driver routes
+ * Match passenger route with driver routes using real route calculation
+ * Uses a hybrid approach: quick filtering first, then real route checks for accuracy
  */
-const findMatchingRides = (passengerRoute, driverRoutes) => {
+const findMatchingRides = async (passengerRoute, driverRoutes) => {
   const matches = [];
+  const USE_REAL_ROUTES = process.env.USE_REAL_ROUTES !== 'false'; // Default to true if not set
 
-  driverRoutes.forEach((driverRoute) => {
-    let matchScore = 0;
-    const reasons = [];
-
-    // Check if passenger pickup is on driver route
-    const pickupOnRoute = isPointOnRoute(
-      passengerRoute.pickupLocation,
-      driverRoute.pickupLocation,
-      driverRoute.dropoffLocation
+  // First pass: Quick filtering using simple distance (fast)
+  // This filters out obviously bad matches before expensive API calls
+  const quickFiltered = driverRoutes.filter((driverRoute) => {
+    // Quick check: if pickup/dropoff are very far from driver route, skip
+    const pickupDistance = calculateDistance(
+      passengerRoute.pickupLocation.latitude,
+      passengerRoute.pickupLocation.longitude,
+      driverRoute.pickupLocation.latitude,
+      driverRoute.pickupLocation.longitude
+    );
+    const dropoffDistance = calculateDistance(
+      passengerRoute.dropoffLocation.latitude,
+      passengerRoute.dropoffLocation.longitude,
+      driverRoute.dropoffLocation.latitude,
+      driverRoute.dropoffLocation.longitude
     );
 
-    // Check if passenger dropoff is on driver route
-    const dropoffOnRoute = isPointOnRoute(
-      passengerRoute.dropoffLocation,
-      driverRoute.pickupLocation,
-      driverRoute.dropoffLocation
-    );
-
-    // Check time match
-    const timeMatch = isTimeMatch(
-      passengerRoute.schedule.time,
-      driverRoute.schedule.time
-    );
-
-    // Check day match
-    const dayMatch = isDayMatch(
-      passengerRoute.schedule.days,
-      driverRoute.schedule.days
-    );
-
-    // Calculate match score
-    if (pickupOnRoute) {
-      matchScore += 30;
-      reasons.push('Pickup on route');
-    }
-    if (dropoffOnRoute) {
-      matchScore += 30;
-      reasons.push('Dropoff on route');
-    }
-    if (timeMatch) {
-      matchScore += 25;
-      reasons.push('Time matches');
-    }
-    if (dayMatch) {
-      matchScore += 15;
-      reasons.push('Days match');
-    }
-
-    // Only include if there's a meaningful match
-    if (matchScore >= 30) {
-      matches.push({
-        ...driverRoute,
-        matchScore,
-        reasons
-      });
-    }
+    // If both points are more than 10km from driver route endpoints, likely not a match
+    return pickupDistance < 10 || dropoffDistance < 10;
   });
+
+  // Second pass: Use real route calculation for accurate matching
+  for (const driverRoute of quickFiltered) {
+    try {
+      let matchScore = 0;
+      const reasons = [];
+      let pickupOnRoute = false;
+      let dropoffOnRoute = false;
+      let pickupDistance = Infinity;
+      let dropoffDistance = Infinity;
+
+      if (USE_REAL_ROUTES) {
+        // Use real route calculation for accurate matching
+        const pickupCheck = await routeService.isPointOnRoute(
+          passengerRoute.pickupLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation,
+          2 // 2km threshold
+        );
+
+        const dropoffCheck = await routeService.isPointOnRoute(
+          passengerRoute.dropoffLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation,
+          2
+        );
+
+        pickupOnRoute = pickupCheck.isOnRoute;
+        dropoffOnRoute = dropoffCheck.isOnRoute;
+        pickupDistance = pickupCheck.distance;
+        dropoffDistance = dropoffCheck.distance;
+      } else {
+        // Fallback to simple calculation if real routes disabled
+        pickupOnRoute = isPointOnRoute(
+          passengerRoute.pickupLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation,
+          2
+        );
+        dropoffOnRoute = isPointOnRoute(
+          passengerRoute.dropoffLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation,
+          2
+        );
+        pickupDistance = distanceToLineSegment(
+          passengerRoute.pickupLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation
+        );
+        dropoffDistance = distanceToLineSegment(
+          passengerRoute.dropoffLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation
+        );
+      }
+
+      // Check time match
+      const timeMatch = isTimeMatch(
+        passengerRoute.schedule.time,
+        driverRoute.schedule.time
+      );
+
+      // Check day match
+      const dayMatch = isDayMatch(
+        passengerRoute.schedule.days,
+        driverRoute.schedule.days
+      );
+
+      // Calculate match score
+      if (pickupOnRoute) {
+        matchScore += 30;
+        reasons.push('Pickup on route');
+      } else if (pickupDistance < 5) {
+        // Close but not exactly on route
+        matchScore += 15;
+        reasons.push(`Pickup near route (${pickupDistance.toFixed(1)}km)`);
+      }
+
+      if (dropoffOnRoute) {
+        matchScore += 30;
+        reasons.push('Dropoff on route');
+      } else if (dropoffDistance < 5) {
+        // Close but not exactly on route
+        matchScore += 15;
+        reasons.push(`Dropoff near route (${dropoffDistance.toFixed(1)}km)`);
+      }
+
+      if (timeMatch) {
+        matchScore += 25;
+        reasons.push('Time matches');
+      }
+
+      if (dayMatch) {
+        matchScore += 15;
+        reasons.push('Days match');
+      }
+
+      // Only include if there's a meaningful match
+      if (matchScore >= 30) {
+        matches.push({
+          ...driverRoute,
+          matchScore,
+          reasons,
+          pickupDistance: pickupDistance < Infinity ? pickupDistance : null,
+          dropoffDistance: dropoffDistance < Infinity ? dropoffDistance : null,
+        });
+      }
+    } catch (error) {
+      console.error(`Error matching route for driver ${driverRoute.id}:`, error);
+      // Continue with next route if one fails
+      // Fallback to simple calculation
+      try {
+        const simplePickupOnRoute = isPointOnRoute(
+          passengerRoute.pickupLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation
+        );
+        const simpleDropoffOnRoute = isPointOnRoute(
+          passengerRoute.dropoffLocation,
+          driverRoute.pickupLocation,
+          driverRoute.dropoffLocation
+        );
+        const timeMatch = isTimeMatch(
+          passengerRoute.schedule.time,
+          driverRoute.schedule.time
+        );
+        const dayMatch = isDayMatch(
+          passengerRoute.schedule.days,
+          driverRoute.schedule.days
+        );
+
+        let matchScore = 0;
+        const reasons = [];
+        if (simplePickupOnRoute) {
+          matchScore += 30;
+          reasons.push('Pickup on route (approx)');
+        }
+        if (simpleDropoffOnRoute) {
+          matchScore += 30;
+          reasons.push('Dropoff on route (approx)');
+        }
+        if (timeMatch) {
+          matchScore += 25;
+          reasons.push('Time matches');
+        }
+        if (dayMatch) {
+          matchScore += 15;
+          reasons.push('Days match');
+        }
+
+        if (matchScore >= 30) {
+          matches.push({
+            ...driverRoute,
+            matchScore,
+            reasons,
+          });
+        }
+      } catch (fallbackError) {
+        console.error('Fallback matching also failed:', fallbackError);
+      }
+    }
+  }
 
   // Sort by match score (highest first)
   return matches.sort((a, b) => b.matchScore - a.matchScore);

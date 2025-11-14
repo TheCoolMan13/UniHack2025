@@ -83,7 +83,7 @@ router.post(
         available_seats: ride.available_seats
       }));
 
-      const matches = findMatchingRides(passengerRoute, driverRoutes);
+      const matches = await findMatchingRides(passengerRoute, driverRoutes);
 
       res.json({
         success: true,

@@ -85,19 +85,21 @@ git merge main  # or: git rebase main
 
 ## 📁 File Ownership Rules
 
-### Frontend Files (Person A's Domain)
+### Frontend Files (Person B's Domain)
 - `frontend/app/screens/**`
 - `frontend/app/components/**`
 - `frontend/app/navigation/**`
 - `frontend/services/api.js` (coordinate changes)
 - `frontend/constants/**`
 
-### Backend Files (Person B's Domain)
+### Backend Files (Person A's Domain - Hosting)
 - `backend/controllers/**`
 - `backend/routes/**`
 - `backend/services/**`
 - `backend/middleware/**`
 - `backend/config/**`
+- `backend/server.js`
+- Deployment and hosting setup
 
 ### Shared Files (Coordinate Changes!)
 - `frontend/services/api.js` - API client
@@ -269,8 +271,8 @@ git checkout .
 Based on your project structure, we recommend:
 
 **Week 1-2: Frontend/Backend Split**
-- Person A: Frontend screens, components, UI
-- Person B: Backend API, database, matching logic
+- Person A: Backend API, database, hosting, server management
+- Person B: Frontend screens, components, UI
 
 **Week 3+: Feature-Based Split**
 - Person A: Complete authentication feature

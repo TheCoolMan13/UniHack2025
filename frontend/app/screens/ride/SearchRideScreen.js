@@ -147,16 +147,19 @@ const SearchRideScreen = () => {
 
         setLoading(true);
         try {
+            // Ensure coordinates are numbers, not strings
             const searchParams = {
-                pickup_latitude: pickupCoordinates.latitude,
-                pickup_longitude: pickupCoordinates.longitude,
+                pickup_latitude: parseFloat(pickupCoordinates.latitude),
+                pickup_longitude: parseFloat(pickupCoordinates.longitude),
                 pickup_address: pickupLocation,
-                dropoff_latitude: dropoffCoordinates.latitude,
-                dropoff_longitude: dropoffCoordinates.longitude,
+                dropoff_latitude: parseFloat(dropoffCoordinates.latitude),
+                dropoff_longitude: parseFloat(dropoffCoordinates.longitude),
                 dropoff_address: dropoffLocation,
-                schedule_days: days,
-                schedule_time: time,
+                schedule_days: Array.isArray(days) ? days : [],
+                schedule_time: time || '',
             };
+
+            console.log('Sending search request:', searchParams);
 
             const response = await ridesAPI.searchRides(searchParams);
 
@@ -172,7 +175,25 @@ const SearchRideScreen = () => {
             }
         } catch (error) {
             console.error("Search rides error:", error);
-            const errorMessage = error.response?.data?.message || error.message || "Failed to search rides";
+            // Get detailed error message (as per Stack Overflow solution)
+            let errorMessage = "Failed to search rides";
+            if (error.response) {
+                // Server responded with error
+                console.error("Error response data:", error.response.data);
+                console.error("Error response status:", error.response.status);
+                errorMessage = error.response.data?.message || 
+                              error.response.data?.error || 
+                              error.response.data?.errors?.[0]?.msg ||
+                              `Server error: ${error.response.status}`;
+            } else if (error.request) {
+                // Request made but no response
+                console.error("No response received:", error.request);
+                errorMessage = "No response from server. Check your connection.";
+            } else {
+                // Error setting up request
+                console.error("Error setting up request:", error.message);
+                errorMessage = error.message;
+            }
             Alert.alert("Error", errorMessage);
             setResults([]);
         } finally {

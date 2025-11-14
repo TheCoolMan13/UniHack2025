@@ -21,6 +21,11 @@ const getRoute = async (origin, destination) => {
     return cached;
   }
 
+  // Check if API key is set
+  if (!process.env.GOOGLE_MAPS_API_KEY) {
+    throw new Error('GOOGLE_MAPS_API_KEY is not set in environment variables');
+  }
+
   try {
     const response = await client.directions({
       params: {
@@ -66,6 +71,11 @@ const getRoute = async (origin, destination) => {
     return routeData;
   } catch (error) {
     console.error('Route calculation error:', error);
+    if (error.response) {
+      // Google Maps API error
+      console.error('Google Maps API error:', error.response.status, error.response.data);
+      throw new Error(`Google Maps API error: ${error.response.status} - ${error.response.data?.error_message || error.message}`);
+    }
     throw new Error(`Failed to calculate route: ${error.message}`);
   }
 };
@@ -146,10 +156,28 @@ const getRouteWithWaypoints = async (origin, waypoints, destination) => {
  */
 const isPointOnRoute = async (point, routeStart, routeEnd, threshold = 2) => {
   try {
+    if (!point || !routeStart || !routeEnd) {
+      throw new Error('Invalid parameters: point, routeStart, and routeEnd are required');
+    }
+
+    if (!point.latitude || !point.longitude || 
+        !routeStart.latitude || !routeStart.longitude ||
+        !routeEnd.latitude || !routeEnd.longitude) {
+      throw new Error('Invalid coordinates: all points must have latitude and longitude');
+    }
+
     const route = await getRoute(routeStart, routeEnd);
+    
+    if (!route || !route.polyline) {
+      throw new Error('Route data is missing polyline');
+    }
     
     // Decode polyline to get route points
     const decoded = polyline.decode(route.polyline);
+    
+    if (!decoded || decoded.length < 2) {
+      throw new Error('Invalid polyline: decoded route has insufficient points');
+    }
     
     let minDistance = Infinity;
     let nearestPoint = null;
@@ -172,19 +200,28 @@ const isPointOnRoute = async (point, routeStart, routeEnd, threshold = 2) => {
       nearestPoint,
     };
   } catch (error) {
-    console.error('Point on route check error:', error);
+    console.error('Point on route check error:', error.message);
     // Fallback to simple straight-line calculation
-    const fallbackDistance = calculateDistance(
-      point.latitude,
-      point.longitude,
-      routeStart.latitude,
-      routeStart.longitude
-    );
-    return {
-      isOnRoute: false,
-      distance: fallbackDistance,
-      nearestPoint: routeStart,
-    };
+    try {
+      const fallbackDistance = calculateDistance(
+        point.latitude,
+        point.longitude,
+        routeStart.latitude,
+        routeStart.longitude
+      );
+      return {
+        isOnRoute: false,
+        distance: fallbackDistance,
+        nearestPoint: routeStart,
+      };
+    } catch (fallbackError) {
+      console.error('Fallback calculation also failed:', fallbackError);
+      return {
+        isOnRoute: false,
+        distance: Infinity,
+        nearestPoint: null,
+      };
+    }
   }
 };
 

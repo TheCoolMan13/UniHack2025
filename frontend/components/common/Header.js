@@ -18,7 +18,7 @@ const Header = ({ title, showBack = true, rightComponent, style, showStatusBar =
             {/* Black status bar area - only if showStatusBar is true */}
             {showStatusBar && <View style={[styles.statusBarArea, { height: insets.top }]} />}
             {/* Header content */}
-            <View style={[styles.header, { paddingTop: showStatusBar ? 0 : 20 }, style]}>
+            <View style={[styles.header, { paddingTop: showStatusBar ? 0 : 16 }, style]}>
                 {showBack && (
                     <TouchableOpacity
                         onPress={() => navigation.goBack()}
@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: 16,
-        paddingBottom: 16,
+        paddingBottom: 8,
         backgroundColor: Colors.backgroundLight,
     },
     backButton: {
@@ -66,9 +66,10 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
     title: {
-        fontSize: 24,
-        fontWeight: "bold",
-        color: Colors.textPrimary,
+        fontSize: 28,
+        fontWeight: "700",
+        color: Colors.primary,
+        letterSpacing: -0.5,
         flex: 1,
     },
     rightComponent: {

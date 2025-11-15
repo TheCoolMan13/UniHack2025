@@ -340,7 +340,6 @@ const MyRidesScreen = () => {
 
     const handleShowMap = async (ride, request) => {
         try {
-            console.log('handleShowMap called with:', { ride, request });
             setSelectedRequest(request);
             setSelectedRide(ride);
             setShowMapModal(true);
@@ -350,9 +349,6 @@ const MyRidesScreen = () => {
                 Alert.alert("Error", "Missing ride or request data");
                 return;
             }
-            
-            console.log('Ride originalRide:', ride.originalRide);
-            console.log('Request object:', request);
             
             // Fetch driver route - ensure coordinates are numbers
             const driverOrigin = {
@@ -374,65 +370,46 @@ const MyRidesScreen = () => {
                 longitude: parseFloat(request.dropoff_longitude || request.dest_longitude || request.dropoffLng || 0)
             };
             
-            console.log('Driver coordinates:', { origin: driverOrigin, dest: driverDest });
-            console.log('Rider coordinates:', { origin: riderOrigin, dest: riderDest });
-            
             // Validate coordinates
             if (isNaN(driverOrigin.latitude) || isNaN(driverOrigin.longitude) ||
                 isNaN(driverDest.latitude) || isNaN(driverDest.longitude) ||
                 isNaN(riderOrigin.latitude) || isNaN(riderOrigin.longitude) ||
                 isNaN(riderDest.latitude) || isNaN(riderDest.longitude)) {
-                console.error('Invalid coordinates detected:', {
-                    driver: { origin: driverOrigin, dest: driverDest },
-                    rider: { origin: riderOrigin, dest: riderDest }
-                });
-                Alert.alert("Error", "Invalid coordinates. Check console for details.");
+                Alert.alert("Error", "Invalid coordinates");
                 return;
             }
             
             // Fetch both routes in parallel
             const [driverRouteRes, riderRouteRes] = await Promise.all([
-                routesAPI.calculateRoute(driverOrigin, driverDest).catch(err => {
-                    console.error("Error fetching driver route:", err);
+                routesAPI.calculateRoute(driverOrigin, driverDest).catch(() => {
                     return { data: { success: false } };
                 }),
-                routesAPI.calculateRoute(riderOrigin, riderDest).catch(err => {
-                    console.error("Error fetching rider route:", err);
+                routesAPI.calculateRoute(riderOrigin, riderDest).catch(() => {
                     return { data: { success: false } };
                 })
             ]);
             
             // Set routes - API returns { success: true, data: { route: {...} } }
-            console.log('Driver route response:', JSON.stringify(driverRouteRes.data, null, 2));
             if (driverRouteRes.data.success && driverRouteRes.data.data) {
                 const route = driverRouteRes.data.data.route || driverRouteRes.data.data;
-                console.log('Driver route object:', route);
                 if (route && route.polyline) {
-                    console.log('✅ Driver route loaded, polyline length:', route.polyline.length);
                     setDriverRoute(route);
                 } else {
-                    console.warn('❌ Driver route missing polyline. Route object:', route);
                     // Still set it so fallback line shows
                     setDriverRoute(null);
                 }
             } else {
-                console.warn('❌ Driver route API failed:', driverRouteRes.data);
                 setDriverRoute(null);
             }
             
-            console.log('Rider route response:', JSON.stringify(riderRouteRes.data, null, 2));
             if (riderRouteRes.data.success && riderRouteRes.data.data) {
                 const route = riderRouteRes.data.data.route || riderRouteRes.data.data;
-                console.log('Rider route object:', route);
                 if (route && route.polyline) {
-                    console.log('✅ Rider route loaded, polyline length:', route.polyline.length);
                     setRiderRoute(route);
                 } else {
-                    console.warn('❌ Rider route missing polyline. Route object:', route);
                     setRiderRoute(null);
                 }
             } else {
-                console.warn('❌ Rider route API failed:', riderRouteRes.data);
                 setRiderRoute(null);
             }
             
@@ -457,8 +434,7 @@ const MyRidesScreen = () => {
                 longitudeDelta: Math.max(lngDelta, 0.01),
             });
         } catch (error) {
-            console.error("Error loading map:", error);
-            Alert.alert("Error", "Failed to load map routes: " + (error.message || "Unknown error"));
+            Alert.alert("Error", "Failed to load map routes");
         }
     };
 
@@ -890,12 +866,6 @@ const MyRidesScreen = () => {
                                 const driverDropoffLat = parseFloat(selectedRide.originalRide.dropoff_latitude);
                                 const driverDropoffLng = parseFloat(selectedRide.originalRide.dropoff_longitude);
                                 
-                                console.log('Driver coordinates:', {
-                                    pickup: { lat: driverPickupLat, lng: driverPickupLng },
-                                    dropoff: { lat: driverDropoffLat, lng: driverDropoffLng },
-                                    originalRide: selectedRide.originalRide
-                                });
-                                
                                 const markers = [];
                                 
                                 // Driver pickup marker
@@ -912,8 +882,6 @@ const MyRidesScreen = () => {
                                             pinColor={Colors.secondary}
                                         />
                                     );
-                                } else {
-                                    console.warn('Invalid driver pickup coordinates');
                                 }
                                 
                                 // Driver dropoff marker
@@ -930,8 +898,6 @@ const MyRidesScreen = () => {
                                             pinColor={Colors.secondary}
                                         />
                                     );
-                                } else {
-                                    console.warn('Invalid driver dropoff coordinates');
                                 }
                                 
                                 if (markers.length === 0) {
@@ -973,7 +939,6 @@ const MyRidesScreen = () => {
                                                     />
                                                 );
                                             } catch (error) {
-                                                console.error('Error rendering driver route:', error);
                                                 return (
                                                     <Polyline
                                                         key="driver-route-fallback"
@@ -1047,12 +1012,6 @@ const MyRidesScreen = () => {
                                     0
                                 );
                                 
-                                console.log('Rider coordinates:', {
-                                    pickup: { lat: riderPickupLat, lng: riderPickupLng },
-                                    dropoff: { lat: riderDropoffLat, lng: riderDropoffLng },
-                                    requestData: selectedRequest
-                                });
-                                
                                 const markers = [];
                                 
                                 // Rider pickup marker
@@ -1069,12 +1028,6 @@ const MyRidesScreen = () => {
                                             pinColor={Colors.primary}
                                         />
                                     );
-                                } else {
-                                    console.warn('Invalid rider pickup coordinates:', {
-                                        lat: riderPickupLat,
-                                        lng: riderPickupLng,
-                                        request: selectedRequest
-                                    });
                                 }
                                 
                                 // Rider dropoff marker
@@ -1091,16 +1044,9 @@ const MyRidesScreen = () => {
                                             pinColor={Colors.error}
                                         />
                                     );
-                                } else {
-                                    console.warn('Invalid rider dropoff coordinates:', {
-                                        lat: riderDropoffLat,
-                                        lng: riderDropoffLng,
-                                        request: selectedRequest
-                                    });
                                 }
                                 
                                 if (markers.length === 0) {
-                                    console.warn('No valid rider markers to display');
                                     return null;
                                 }
                                 
@@ -1139,7 +1085,6 @@ const MyRidesScreen = () => {
                                                     />
                                                 );
                                             } catch (error) {
-                                                console.error('Error rendering rider route:', error);
                                                 return (
                                                     <Polyline
                                                         key="rider-route-fallback"

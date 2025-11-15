@@ -113,12 +113,12 @@ router.post(
   '/:id/request',
   authenticate,
   [
-    body('pickup_latitude').optional().isFloat({ min: -90, max: 90 }),
-    body('pickup_longitude').optional().isFloat({ min: -180, max: 180 }),
-    body('pickup_address').optional().trim(),
-    body('dropoff_latitude').optional().isFloat({ min: -90, max: 90 }),
-    body('dropoff_longitude').optional().isFloat({ min: -180, max: 180 }),
-    body('dropoff_address').optional().trim()
+    body('pickup_latitude').optional({ checkFalsy: true }).isFloat({ min: -90, max: 90 }),
+    body('pickup_longitude').optional({ checkFalsy: true }).isFloat({ min: -180, max: 180 }),
+    body('pickup_address').optional({ checkFalsy: true }).trim(),
+    body('dropoff_latitude').optional({ checkFalsy: true }).isFloat({ min: -90, max: 90 }),
+    body('dropoff_longitude').optional({ checkFalsy: true }).isFloat({ min: -180, max: 180 }),
+    body('dropoff_address').optional({ checkFalsy: true }).trim()
   ],
   ridesController.requestRide
 );

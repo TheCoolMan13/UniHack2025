@@ -838,7 +838,16 @@ const SearchRideScreen = () => {
                                                     }
                                                 } catch (error) {
                                                     console.error("Request ride error:", error);
-                                                    const errorMessage = error.response?.data?.message || error.message || "Failed to request ride";
+                                                    let errorMessage = "Failed to request ride";
+                                                    if (error.response?.data) {
+                                                        if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+                                                            errorMessage = error.response.data.errors.map(e => e.msg || e.message).join('\n');
+                                                        } else {
+                                                            errorMessage = error.response.data.message || errorMessage;
+                                                        }
+                                                    } else {
+                                                        errorMessage = error.message || errorMessage;
+                                                    }
                                                     Alert.alert("Error", errorMessage);
                                                 }
                                             }}

@@ -763,8 +763,19 @@ const searchRides = async (req, res, next) => {
  * @route   POST /api/rides/:id/request
  * @access  Private
  */
-const requestRide = async (req, res) => {
+const requestRide = async (req, res, next) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.error('Request ride validation errors:', errors.array());
+      console.error('Request body:', JSON.stringify(req.body, null, 2));
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
     const { id } = req.params;
     const userId = req.user.id;
 
@@ -852,10 +863,16 @@ const requestRide = async (req, res) => {
     });
   } catch (error) {
     console.error('Request ride error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error creating ride request'
-    });
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: error?.message || 'Server error creating ride request'
+      });
+    } else {
+      next(error);
+    }
   }
 };
 

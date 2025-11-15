@@ -16,23 +16,30 @@ import { useAuth } from "../../../context/AuthContext";
 
 const MapScreen = () => {
     const { user } = useAuth();
+    const mapRef = useRef(null);
     const [location, setLocation] = useState(null);
-    const [region, setRegion] = useState({
-        latitude: MAP_CONFIG.DEFAULT_LATITUDE,
-        longitude: MAP_CONFIG.DEFAULT_LONGITUDE,
-        latitudeDelta: MAP_CONFIG.DEFAULT_LATITUDE_DELTA,
-        longitudeDelta: MAP_CONFIG.DEFAULT_LONGITUDE_DELTA,
-    });
+    const [region, setRegion] = useState(null); // Start with null, will be set when location is available
     const [hasPermission, setHasPermission] = useState(false);
     const [rides, setRides] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedRide, setSelectedRide] = useState(null);
     const markerPressRef = useRef(false);
+    const [locationLoading, setLocationLoading] = useState(true);
 
     useEffect(() => {
         requestLocationPermission();
         fetchActiveRides();
     }, []);
+
+    // Center map on location when it becomes available
+    useEffect(() => {
+        if (location && mapRef.current && region) {
+            // Small delay to ensure map is rendered
+            setTimeout(() => {
+                mapRef.current?.animateToRegion(region, 1000);
+            }, 100);
+        }
+    }, [location, region]);
 
     /**
      * Fetch user's rides (both offered as driver and requested as passenger)
@@ -84,6 +91,7 @@ const MapScreen = () => {
      */
     const requestLocationPermission = async () => {
         try {
+            setLocationLoading(true);
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== "granted") {
                 Alert.alert(
@@ -91,23 +99,49 @@ const MapScreen = () => {
                     "Location permission is required to use the map feature."
                 );
                 setHasPermission(false);
+                // Fallback to default location if permission denied
+                setRegion({
+                    latitude: MAP_CONFIG.DEFAULT_LATITUDE,
+                    longitude: MAP_CONFIG.DEFAULT_LONGITUDE,
+                    latitudeDelta: MAP_CONFIG.DEFAULT_LATITUDE_DELTA,
+                    longitudeDelta: MAP_CONFIG.DEFAULT_LONGITUDE_DELTA,
+                });
+                setLocationLoading(false);
                 return;
             }
 
             setHasPermission(true);
-            const currentLocation = await Location.getCurrentPositionAsync({});
+            const currentLocation = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
             const { latitude, longitude } = currentLocation.coords;
 
-            setLocation({ latitude, longitude });
-            setRegion({
+            const newRegion = {
                 latitude,
                 longitude,
                 latitudeDelta: 0.0922,
                 longitudeDelta: 0.0421,
-            });
+            };
+
+            setLocation({ latitude, longitude });
+            setRegion(newRegion);
+            
+            // Animate map to user location once it's available
+            if (mapRef.current) {
+                mapRef.current.animateToRegion(newRegion, 1000);
+            }
         } catch (error) {
             console.error("Error getting location:", error);
             Alert.alert("Error", "Failed to get your location.");
+            // Fallback to default location on error
+            setRegion({
+                latitude: MAP_CONFIG.DEFAULT_LATITUDE,
+                longitude: MAP_CONFIG.DEFAULT_LONGITUDE,
+                latitudeDelta: MAP_CONFIG.DEFAULT_LATITUDE_DELTA,
+                longitudeDelta: MAP_CONFIG.DEFAULT_LONGITUDE_DELTA,
+            });
+        } finally {
+            setLocationLoading(false);
         }
     };
 
@@ -116,11 +150,16 @@ const MapScreen = () => {
      */
     const centerOnUser = async () => {
         if (hasPermission && location) {
-            setRegion({
-                ...region,
+            const newRegion = {
                 latitude: location.latitude,
                 longitude: location.longitude,
-            });
+                latitudeDelta: 0.0922,
+                longitudeDelta: 0.0421,
+            };
+            setRegion(newRegion);
+            if (mapRef.current) {
+                mapRef.current.animateToRegion(newRegion, 1000);
+            }
         } else {
             await requestLocationPermission();
         }
@@ -151,12 +190,34 @@ const MapScreen = () => {
         }, 100);
     };
 
+    // Show loading indicator while getting location
+    if (locationLoading && !region) {
+        return (
+            <View style={styles.container}>
+                <Header title="Map" showBack={false} showStatusBar={true} />
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <Text style={styles.loadingText}>Getting your location...</Text>
+                </View>
+            </View>
+        );
+    }
+
+    // Fallback region if location is not available
+    const mapRegion = region || {
+        latitude: MAP_CONFIG.DEFAULT_LATITUDE,
+        longitude: MAP_CONFIG.DEFAULT_LONGITUDE,
+        latitudeDelta: MAP_CONFIG.DEFAULT_LATITUDE_DELTA,
+        longitudeDelta: MAP_CONFIG.DEFAULT_LONGITUDE_DELTA,
+    };
+
     return (
         <View style={styles.container}>
-            <Header title="Map" showBack={false} />
+            <Header title="Map" showBack={false} showStatusBar={true} />
             <MapView
+                ref={mapRef}
                 style={styles.map}
-                region={region}
+                region={mapRegion}
                 onRegionChangeComplete={setRegion}
                 showsUserLocation={hasPermission}
                 showsMyLocationButton={false}
@@ -166,6 +227,7 @@ const MapScreen = () => {
                         setSelectedRide(null);
                     }
                 }}
+                initialRegion={mapRegion}
             >
                 {/* User location marker */}
                 {location && (
@@ -321,6 +383,17 @@ const styles = StyleSheet.create({
     },
     map: {
         flex: 1,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: Colors.background,
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: Colors.textSecondary,
     },
     controls: {
         position: "absolute",

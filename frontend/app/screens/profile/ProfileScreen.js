@@ -30,10 +30,10 @@ const ProfileScreen = () => {
     };
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-            <Header title="Profile" showBack={false} />
-
-            {/* Profile Header */}
+        <View style={styles.container}>
+            <Header title="Profile" showBack={false} showStatusBar={true} />
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+                {/* Profile Header */}
             <Card style={styles.profileCard}>
                 <View style={styles.avatarContainer}>
                     <View style={styles.avatar}>
@@ -107,7 +107,8 @@ const ProfileScreen = () => {
                 onPress={handleLogout}
                 style={styles.logoutButton}
             />
-        </ScrollView>
+            </ScrollView>
+        </View>
     );
 };
 
@@ -117,6 +118,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Colors.background,
+    },
+    scrollView: {
+        flex: 1,
     },
     content: {
         paddingBottom: 40,

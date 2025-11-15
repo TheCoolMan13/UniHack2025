@@ -80,8 +80,9 @@ export const ridesAPI = {
     // Common endpoints
     getActiveRides: () => api.get("/rides/active"), // Get all active rides for map
     getRideDetails: (rideId) => api.get(`/rides/${rideId}`),
-    acceptRequest: (rideId, requestId) => api.post(`/rides/${rideId}/accept`, { requestId }),
-    rejectRequest: (rideId, requestId) => api.post(`/rides/${rideId}/reject`, { requestId }),
+    acceptRequest: (rideId, requestId) => api.post(`/rides/${rideId}/accept`, { request_id: requestId }),
+    rejectRequest: (rideId, requestId) => api.post(`/rides/${rideId}/reject`, { request_id: requestId }),
+    cancelRequest: (rideId, requestId) => api.post(`/rides/${rideId}/cancel`, { request_id: requestId }),
 };
 
 /**
@@ -98,6 +99,15 @@ export const matchingAPI = {
 export const geocodingAPI = {
     geocode: (address) => api.get(`/geocoding/geocode?address=${encodeURIComponent(address)}`),
     reverseGeocode: (lat, lng) => api.get(`/geocoding/reverse?lat=${lat}&lng=${lng}`),
+};
+
+/**
+ * Routes API
+ */
+export const routesAPI = {
+    calculateRoute: (origin, destination) => api.post("/routes/calculate", { origin, destination }),
+    calculateRouteWithWaypoints: (origin, waypoints, destination) => 
+        api.post("/routes/calculate-with-waypoints", { origin, waypoints, destination }),
 };
 
 export default api;

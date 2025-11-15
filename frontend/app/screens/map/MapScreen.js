@@ -335,6 +335,18 @@ const MapScreen = () => {
         );
     }
 
+    // Show "Not available" message on iOS devices
+    if (Platform.OS === 'ios') {
+        return (
+            <View style={styles.container}>
+                <Header title="Map" showBack={false} showStatusBar={true} />
+                <View style={styles.unavailableContainer}>
+                    <Text style={styles.unavailableText}>Not available on all iOS devices</Text>
+                </View>
+            </View>
+        );
+    }
+
     // Fallback region if location is not available
     const mapRegion = region || {
         latitude: MAP_CONFIG.DEFAULT_LATITUDE,
@@ -441,7 +453,31 @@ const MapScreen = () => {
                         // Get actual route if available, otherwise use straight line
                         const routeKey = `${ride.rideType}-${ride.id}`;
                         const routeData = rideRoutes[routeKey];
-                        const routeCoordinates = routeData?.coordinates || [safePickupCoord, safeDropoffCoord];
+                        let routeCoordinates = routeData?.coordinates || [safePickupCoord, safeDropoffCoord];
+                        
+                        // Validate and limit coordinates for iOS safety
+                        if (Array.isArray(routeCoordinates) && routeCoordinates.length > 0) {
+                            routeCoordinates = routeCoordinates
+                                .filter(coord => {
+                                    const lat = Number(coord.latitude);
+                                    const lng = Number(coord.longitude);
+                                    return !isNaN(lat) && !isNaN(lng) && 
+                                           lat >= -90 && lat <= 90 && 
+                                           lng >= -180 && lng <= 180;
+                                })
+                                .slice(0, 500) // Limit to 500 coordinates max
+                                .map(coord => ({
+                                    latitude: Number(coord.latitude),
+                                    longitude: Number(coord.longitude),
+                                }));
+                            
+                            // Ensure we have at least 2 points
+                            if (routeCoordinates.length < 2) {
+                                routeCoordinates = [safePickupCoord, safeDropoffCoord];
+                            }
+                        } else {
+                            routeCoordinates = [safePickupCoord, safeDropoffCoord];
+                        }
                         
                         markers.push(
                             <Marker
@@ -458,10 +494,7 @@ const MapScreen = () => {
                             />,
                             <Polyline
                                 key={`ride-${ride.rideType}-${ride.id}-route`}
-                                coordinates={routeCoordinates.map(coord => ({
-                                    latitude: Number(coord.latitude),
-                                    longitude: Number(coord.longitude),
-                                }))}
+                                coordinates={routeCoordinates}
                                 strokeColor={routeColor}
                                 strokeWidth={Number(routeWidth)}
                                 tappable={true}
@@ -494,7 +527,30 @@ const MapScreen = () => {
                                         // Get actual route if available
                                         const reqRouteKey = `${ride.id}-${request.id}-accepted`;
                                         const reqRouteData = requestRoutes[reqRouteKey];
-                                        const reqRouteCoordinates = reqRouteData?.coordinates || [safeReqPickup, safeReqDropoff];
+                                        let reqRouteCoordinates = reqRouteData?.coordinates || [safeReqPickup, safeReqDropoff];
+                                        
+                                        // Validate and limit coordinates
+                                        if (Array.isArray(reqRouteCoordinates) && reqRouteCoordinates.length > 0) {
+                                            reqRouteCoordinates = reqRouteCoordinates
+                                                .filter(coord => {
+                                                    const lat = Number(coord.latitude);
+                                                    const lng = Number(coord.longitude);
+                                                    return !isNaN(lat) && !isNaN(lng) && 
+                                                           lat >= -90 && lat <= 90 && 
+                                                           lng >= -180 && lng <= 180;
+                                                })
+                                                .slice(0, 500)
+                                                .map(coord => ({
+                                                    latitude: Number(coord.latitude),
+                                                    longitude: Number(coord.longitude),
+                                                }));
+                                            
+                                            if (reqRouteCoordinates.length < 2) {
+                                                reqRouteCoordinates = [safeReqPickup, safeReqDropoff];
+                                            }
+                                        } else {
+                                            reqRouteCoordinates = [safeReqPickup, safeReqDropoff];
+                                        }
                                         
                                         markers.push(
                                             <Marker
@@ -513,10 +569,7 @@ const MapScreen = () => {
                                             />,
                                             <Polyline
                                                 key={`accepted-${ride.id}-${request.id}-route`}
-                                                coordinates={reqRouteCoordinates.map(coord => ({
-                                                    latitude: Number(coord.latitude),
-                                                    longitude: Number(coord.longitude),
-                                                }))}
+                                                coordinates={reqRouteCoordinates}
                                                 strokeColor="#00AA44"
                                                 strokeWidth={2}
                                                 lineDashPattern={reqRouteData ? undefined : [5, 5]}
@@ -553,7 +606,30 @@ const MapScreen = () => {
                                         // Get actual route if available
                                         const reqRouteKey = `${ride.id}-${request.id}-pending`;
                                         const reqRouteData = requestRoutes[reqRouteKey];
-                                        const reqRouteCoordinates = reqRouteData?.coordinates || [safeReqPickup, safeReqDropoff];
+                                        let reqRouteCoordinates = reqRouteData?.coordinates || [safeReqPickup, safeReqDropoff];
+                                        
+                                        // Validate and limit coordinates
+                                        if (Array.isArray(reqRouteCoordinates) && reqRouteCoordinates.length > 0) {
+                                            reqRouteCoordinates = reqRouteCoordinates
+                                                .filter(coord => {
+                                                    const lat = Number(coord.latitude);
+                                                    const lng = Number(coord.longitude);
+                                                    return !isNaN(lat) && !isNaN(lng) && 
+                                                           lat >= -90 && lat <= 90 && 
+                                                           lng >= -180 && lng <= 180;
+                                                })
+                                                .slice(0, 500)
+                                                .map(coord => ({
+                                                    latitude: Number(coord.latitude),
+                                                    longitude: Number(coord.longitude),
+                                                }));
+                                            
+                                            if (reqRouteCoordinates.length < 2) {
+                                                reqRouteCoordinates = [safeReqPickup, safeReqDropoff];
+                                            }
+                                        } else {
+                                            reqRouteCoordinates = [safeReqPickup, safeReqDropoff];
+                                        }
                                         
                                         markers.push(
                                             <Marker
@@ -572,10 +648,7 @@ const MapScreen = () => {
                                             />,
                                             <Polyline
                                                 key={`pending-${ride.id}-${request.id}-route`}
-                                                coordinates={reqRouteCoordinates.map(coord => ({
-                                                    latitude: Number(coord.latitude),
-                                                    longitude: Number(coord.longitude),
-                                                }))}
+                                                coordinates={reqRouteCoordinates}
                                                 strokeColor="#FFA500"
                                                 strokeWidth={2}
                                                 lineDashPattern={reqRouteData ? undefined : [3, 3]}
@@ -688,6 +761,19 @@ const styles = StyleSheet.create({
         marginTop: 16,
         fontSize: 16,
         color: Colors.textSecondary,
+    },
+    unavailableContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: Colors.background,
+        padding: 32,
+    },
+    unavailableText: {
+        fontSize: 18,
+        color: Colors.textSecondary,
+        textAlign: "center",
+        fontWeight: "500",
     },
     controls: {
         position: "absolute",

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions, Platform } from "react-native";
+import { useSafeAreaInsets, useSafeAreaFrame } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { useAuth } from "../../../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
@@ -20,6 +21,9 @@ import { MAP_CONFIG } from "../../../constants/config";
 const MyRidesScreen = () => {
     const { currentRole, user } = useAuth();
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
+    const frame = useSafeAreaFrame();
+    const windowHeight = Dimensions.get('window').height;
     const [activeTab, setActiveTab] = useState("requested"); // 'requested', 'offered', or 'saved'
     const [requestedRides, setRequestedRides] = useState([]); // Rides user requested as passenger
     const [offeredRides, setOfferedRides] = useState([]); // Rides user posted as driver
@@ -830,13 +834,20 @@ const MyRidesScreen = () => {
             </ScrollView>
 
             {/* Map Modal for viewing routes */}
-            <Modal
-                visible={showMapModal}
-                animationType="slide"
-                transparent={false}
-                onRequestClose={() => setShowMapModal(false)}
-            >
-                <View style={styles.modalContainer}>
+            {showMapModal && (
+                <View style={styles.modalOverlay}>
+                    <TouchableOpacity 
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={() => {
+                            setShowMapModal(false);
+                            setSelectedRequest(null);
+                            setSelectedRide(null);
+                            setDriverRoute(null);
+                            setRiderRoute(null);
+                        }}
+                    />
+                    <View style={[styles.modalContainer, { marginBottom: -35 + Math.max(insets.bottom, 0) }]}>
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>Route Map</Text>
                         <TouchableOpacity
@@ -853,12 +864,13 @@ const MyRidesScreen = () => {
                         </TouchableOpacity>
                     </View>
                     
-                    {mapRegion && (
+                    {mapRegion ? (
                         <MapView
                             ref={mapRef}
                             style={styles.modalMap}
                             region={mapRegion}
                             onRegionChangeComplete={setMapRegion}
+                            initialRegion={mapRegion}
                         >
                             {/* Driver's route markers */}
                             {selectedRide && selectedRide.originalRide && (
@@ -879,14 +891,59 @@ const MyRidesScreen = () => {
                                         title="Your End"
                                         pinColor={Colors.secondary}
                                     />
-                                    {driverRoute && driverRoute.polyline ? (
-                                        <Polyline
-                                            key="driver-route-polyline"
-                                            coordinates={decodePolyline(driverRoute.polyline)}
-                                            strokeColor={Colors.secondary}
-                                            strokeWidth={4}
-                                        />
-                                    ) : (
+                                    {driverRoute && driverRoute.polyline ? (() => {
+                                        try {
+                                            const coords = decodePolyline(driverRoute.polyline, true);
+                                            if (coords.length === 0) {
+                                                return (
+                                                    <Polyline
+                                                        key="driver-route-fallback"
+                                                        coordinates={[
+                                                            {
+                                                                latitude: parseFloat(selectedRide.originalRide.pickup_latitude) || 0,
+                                                                longitude: parseFloat(selectedRide.originalRide.pickup_longitude) || 0
+                                                            },
+                                                            {
+                                                                latitude: parseFloat(selectedRide.originalRide.dropoff_latitude) || 0,
+                                                                longitude: parseFloat(selectedRide.originalRide.dropoff_longitude) || 0
+                                                            }
+                                                        ]}
+                                                        strokeColor={Colors.secondary}
+                                                        strokeWidth={3}
+                                                        lineDashPattern={[5, 5]}
+                                                    />
+                                                );
+                                            }
+                                            return (
+                                                <Polyline
+                                                    key="driver-route-polyline"
+                                                    coordinates={coords}
+                                                    strokeColor={Colors.secondary}
+                                                    strokeWidth={4}
+                                                />
+                                            );
+                                        } catch (error) {
+                                            console.error('Error rendering driver route:', error);
+                                            return (
+                                                <Polyline
+                                                    key="driver-route-fallback"
+                                                    coordinates={[
+                                                        {
+                                                            latitude: parseFloat(selectedRide.originalRide.pickup_latitude) || 0,
+                                                            longitude: parseFloat(selectedRide.originalRide.pickup_longitude) || 0
+                                                        },
+                                                        {
+                                                            latitude: parseFloat(selectedRide.originalRide.dropoff_latitude) || 0,
+                                                            longitude: parseFloat(selectedRide.originalRide.dropoff_longitude) || 0
+                                                        }
+                                                    ]}
+                                                    strokeColor={Colors.secondary}
+                                                    strokeWidth={3}
+                                                    lineDashPattern={[5, 5]}
+                                                />
+                                            );
+                                        }
+                                    })() : (
                                         <Polyline
                                             key="driver-route-fallback"
                                             coordinates={[
@@ -926,13 +983,24 @@ const MyRidesScreen = () => {
                                         title={`${selectedRequest.passenger_name || 'Passenger'}'s Dropoff`}
                                         pinColor={Colors.error}
                                     />
-                                    {riderRoute && riderRoute.polyline && (
-                                        <Polyline
-                                            coordinates={decodePolyline(riderRoute.polyline)}
-                                            strokeColor={Colors.primary}
-                                            strokeWidth={4}
-                                        />
-                                    )}
+                                    {riderRoute && riderRoute.polyline && (() => {
+                                        try {
+                                            const coords = decodePolyline(riderRoute.polyline, true);
+                                            if (coords.length === 0) {
+                                                return null;
+                                            }
+                                            return (
+                                                <Polyline
+                                                    coordinates={coords}
+                                                    strokeColor={Colors.primary}
+                                                    strokeWidth={4}
+                                                />
+                                            );
+                                        } catch (error) {
+                                            console.error('Error rendering rider route:', error);
+                                            return null;
+                                        }
+                                    })()}
                                     {/* Fallback: Draw straight line if no polyline */}
                                     {(!riderRoute || !riderRoute.polyline) && (
                                         <Polyline
@@ -954,6 +1022,11 @@ const MyRidesScreen = () => {
                                 </>
                             )}
                         </MapView>
+                    ) : (
+                        <View style={styles.mapLoadingContainer}>
+                            <ActivityIndicator size="large" color={Colors.primary} />
+                            <Text style={styles.mapLoadingText}>Loading map...</Text>
+                        </View>
                     )}
                     
                     <View style={styles.mapLegend}>
@@ -966,8 +1039,9 @@ const MyRidesScreen = () => {
                             <Text style={styles.legendText}>Rider's Route</Text>
                         </View>
                     </View>
+                    </View>
                 </View>
-            </Modal>
+            )}
         </View>
     );
 };
@@ -1241,9 +1315,24 @@ const styles = StyleSheet.create({
         borderLeftWidth: 3,
         borderLeftColor: Colors.secondary,
     },
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        zIndex: 1000,
+        justifyContent: 'flex-end',
+    },
     modalContainer: {
-        flex: 1,
         backgroundColor: Colors.background,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        width: '100%',
+        height: Dimensions.get('window').height * 0.75,
+        overflow: 'hidden',
+        flexDirection: 'column',
     },
     modalHeader: {
         flexDirection: "row",
@@ -1268,6 +1357,19 @@ const styles = StyleSheet.create({
     },
     modalMap: {
         flex: 1,
+        minHeight: 400,
+        width: '100%',
+    },
+    mapLoadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 400,
+    },
+    mapLoadingText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: Colors.textSecondary,
     },
     mapLegend: {
         flexDirection: "row",

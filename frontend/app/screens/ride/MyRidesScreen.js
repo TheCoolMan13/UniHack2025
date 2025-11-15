@@ -23,6 +23,7 @@ const MyRidesScreen = () => {
     const [activeTab, setActiveTab] = useState("requested"); // 'requested', 'offered', or 'saved'
     const [requestedRides, setRequestedRides] = useState([]); // Rides user requested as passenger
     const [offeredRides, setOfferedRides] = useState([]); // Rides user posted as driver
+    const [savedSearches, setSavedSearches] = useState([]); // Saved searches
     const [newMatchesCount, setNewMatchesCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -38,6 +39,9 @@ const MyRidesScreen = () => {
     useEffect(() => {
         fetchAllRides();
         fetchNewMatchesCount(); // Always fetch to show badge count
+        if (activeTab === "saved") {
+            fetchSavedSearches();
+        }
     }, [activeTab]);
 
     const fetchNewMatchesCount = async () => {
@@ -49,6 +53,18 @@ const MyRidesScreen = () => {
             }
         } catch (error) {
             console.error("Fetch new matches count error:", error);
+        }
+    };
+
+    const fetchSavedSearches = async () => {
+        try {
+            const response = await riderSearchesAPI.getMySavedSearches();
+            if (response.data.success) {
+                const searches = response.data.data.searches || [];
+                setSavedSearches(searches);
+            }
+        } catch (error) {
+            console.error("Fetch saved searches error:", error);
         }
     };
 
@@ -137,6 +153,56 @@ const MyRidesScreen = () => {
         setRefreshing(true);
         fetchAllRides();
         fetchNewMatchesCount();
+        if (activeTab === "saved") {
+            fetchSavedSearches();
+        }
+    };
+
+    const handleCancelSearch = async (searchId) => {
+        Alert.alert(
+            "Cancel Search",
+            "Are you sure you want to cancel this saved search?",
+            [
+                { text: "No", style: "cancel" },
+                {
+                    text: "Yes",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const response = await riderSearchesAPI.cancelSavedSearch(searchId);
+                            if (response.data.success) {
+                                Alert.alert("Success", "Search cancelled");
+                                fetchSavedSearches();
+                            } else {
+                                Alert.alert("Error", response.data.message || "Failed to cancel search");
+                            }
+                        } catch (error) {
+                            console.error("Cancel search error:", error);
+                            const errorMessage = error.response?.data?.message || error.message || "Failed to cancel search";
+                            Alert.alert("Error", errorMessage);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const getStatusBadge = (status) => {
+        const statusColors = {
+            active: Colors.secondary,
+            fulfilled: Colors.primary,
+            cancelled: Colors.error
+        };
+        const statusLabels = {
+            active: "Active",
+            fulfilled: "Fulfilled",
+            cancelled: "Cancelled"
+        };
+        return (
+            <View style={[styles.searchStatusBadge, { backgroundColor: statusColors[status] || Colors.textSecondary }]}>
+                <Text style={styles.searchStatusBadgeText}>{statusLabels[status] || status}</Text>
+            </View>
+        );
     };
 
     const handleAcceptRequest = async (rideId, requestId) => {
@@ -438,7 +504,7 @@ const MyRidesScreen = () => {
                         <Text style={styles.loadingText}>Loading rides...</Text>
                     </View>
                 ) : activeTab === "saved" ? (
-                    <View style={styles.savedSearchesContainer}>
+                    <>
                         {newMatchesCount > 0 && (
                             <Card style={styles.newMatchesBanner}>
                                 <View style={styles.newMatchesContent}>
@@ -453,18 +519,56 @@ const MyRidesScreen = () => {
                                 </View>
                             </Card>
                         )}
-                        <Card style={styles.savedSearchesCard}>
-                            <Text style={styles.savedSearchesTitle}>Saved Searches</Text>
-                            <Text style={styles.savedSearchesText}>
-                                View and manage your saved searches for future matches.
-                            </Text>
-                            <Button
-                                title="View Saved Searches"
-                                onPress={() => navigation.navigate("SavedSearches")}
-                                style={styles.viewSavedSearchesButton}
-                            />
-                        </Card>
-                    </View>
+                        {savedSearches.length === 0 ? (
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>No saved searches</Text>
+                                <Text style={styles.emptySubtext}>
+                                    When you search for rides and find no matches, you can save your search to be notified when a matching ride becomes available.
+                                </Text>
+                            </View>
+                        ) : (
+                            savedSearches.map((search) => (
+                                <Card key={search.id} style={styles.rideCard}>
+                                    <View style={styles.rideHeader}>
+                                        <Text style={styles.rideTitle}>
+                                            {search.pickup_address} → {search.dropoff_address}
+                                        </Text>
+                                        {getStatusBadge(search.status)}
+                                    </View>
+                                    
+                                    <Text style={styles.rideInfoText}>
+                                        ⏰ {search.schedule_time} • {Array.isArray(search.schedule_days) ? search.schedule_days.join(', ') : search.schedule_days}
+                                    </Text>
+                                    
+                                    {search.new_matches > 0 && (
+                                        <View style={styles.matchesBadge}>
+                                            <Text style={styles.matchesBadgeText}>
+                                                {search.new_matches} new match{search.new_matches > 1 ? 'es' : ''}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    
+                                    {search.status === 'active' && (
+                                        <View style={styles.rideActions}>
+                                            {search.new_matches > 0 && (
+                                                <Button
+                                                    title="View Matches"
+                                                    onPress={() => navigation.navigate("NewMatches")}
+                                                    style={styles.actionButton}
+                                                />
+                                            )}
+                                            <Button
+                                                title="Cancel Search"
+                                                onPress={() => handleCancelSearch(search.id)}
+                                                variant="outline"
+                                                style={styles.actionButton}
+                                            />
+                                        </View>
+                                    )}
+                                </Card>
+                            ))
+                        )}
+                    </>
                 ) : (activeTab === "requested" ? requestedRides : offeredRides).length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyText}>
@@ -1256,6 +1360,45 @@ const styles = StyleSheet.create({
     },
     viewSavedSearchesButton: {
         marginTop: 8,
+    },
+    searchStatusBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    searchStatusBadgeText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#FFFFFF",
+    },
+    matchesBadge: {
+        backgroundColor: Colors.secondary + '20',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: 8,
+        marginBottom: 8,
+    },
+    matchesBadgeText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: Colors.secondary,
+    },
+    actionButton: {
+        flex: 1,
+        marginHorizontal: 4,
+    },
+    rideInfoText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginTop: 8,
+        marginBottom: 8,
+    },
+    rideActions: {
+        flexDirection: "row",
+        marginTop: 12,
+        gap: 8,
     },
 });
 

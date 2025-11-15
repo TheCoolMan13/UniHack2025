@@ -920,7 +920,16 @@ const SearchRideScreen = () => {
                                             }
                                         } catch (error) {
                                             console.error("Save search error:", error);
-                                            const errorMessage = error.response?.data?.message || error.message || "Failed to save search";
+                                            let errorMessage = "Failed to save search";
+                                            if (error.response?.data) {
+                                                if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+                                                    errorMessage = error.response.data.errors.map(e => e.msg || e.message).join('\n');
+                                                } else {
+                                                    errorMessage = error.response.data.message || errorMessage;
+                                                }
+                                            } else {
+                                                errorMessage = error.message || errorMessage;
+                                            }
                                             Alert.alert("Error", errorMessage);
                                         }
                                     }}
@@ -931,18 +940,6 @@ const SearchRideScreen = () => {
                                 </Text>
                             </>
                         )}
-                    </Card>
-                )}
-                
-                {/* Debug info - remove later */}
-                {__DEV__ && showMap && (
-                    <Card style={styles.debugCard}>
-                        <Text style={styles.debugText}>
-                            Debug: showMap={showMap ? 'true' : 'false'}, 
-                            results={results.length}, 
-                            driverRequests={driverRequests.length}, 
-                            role={currentRole}
-                        </Text>
                     </Card>
                 )}
             </ScrollView>
@@ -1210,15 +1207,6 @@ const styles = StyleSheet.create({
         marginTop: 16,
         marginBottom: 8,
         backgroundColor: Colors.primary,
-    },
-    debugCard: {
-        margin: 16,
-        padding: 12,
-        backgroundColor: '#FFE5E5',
-    },
-    debugText: {
-        fontSize: 12,
-        color: '#CC0000',
     },
 });
 

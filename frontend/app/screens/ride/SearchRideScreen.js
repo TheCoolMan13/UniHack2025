@@ -38,6 +38,8 @@ const SearchRideScreen = () => {
     const [driverOriginalRoute, setDriverOriginalRoute] = useState(null); // Driver's original route
     const [mapRegion, setMapRegion] = useState(null);
     const mapRef = useRef(null);
+    const scrollViewRef = useRef(null);
+    const [editingSearchId, setEditingSearchId] = useState(null); // Track if editing a saved search
     
     // Use refs to track current values for use in callbacks
     const pickupLocationRef = useRef(pickupLocation);
@@ -67,7 +69,16 @@ const SearchRideScreen = () => {
         if (route.params?.dropoffCoordinates) {
             setDropoffCoordinates(route.params.dropoffCoordinates);
         }
-    }, []);
+        if (route.params?.time) {
+            setTime(route.params.time);
+        }
+        if (route.params?.days && Array.isArray(route.params.days)) {
+            setDays(route.params.days);
+        }
+        if (route.params?.editingSearchId) {
+            setEditingSearchId(route.params.editingSearchId);
+        }
+    }, [route.params]);
 
     // Also listen for params changes (not just on focus)
     useEffect(() => {
@@ -300,6 +311,18 @@ const SearchRideScreen = () => {
             setDriverRequests(driverRequestMatches);
             setShowMap(true); // Show map with results
             
+            // Auto-scroll to results after a short delay to ensure UI is rendered
+            setTimeout(() => {
+                if (scrollViewRef.current) {
+                    // Scroll to show the results section
+                    // First scroll to a position that shows the map and results
+                    scrollViewRef.current.scrollTo({
+                        y: 600, // Scroll past the form to show map and results
+                        animated: true,
+                    });
+                }
+            }, 600);
+            
             // Don't show alert - let the UI handle it
         } catch (error) {
             console.error("Search rides error:", error);
@@ -420,6 +443,7 @@ const SearchRideScreen = () => {
         >
             <Header title="Search Rides" />
             <ScrollView
+                ref={scrollViewRef}
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
             >
@@ -872,6 +896,83 @@ const SearchRideScreen = () => {
                     </View>
                 )}
 
+                {/* Save/Update Search Button - Always visible after search */}
+                {showMap && pickupLocation && dropoffLocation && time && days.length > 0 && (
+                    <Card style={styles.saveSearchCard}>
+                        <Button
+                            title={editingSearchId ? "💾 Update Saved Search" : "💾 Save Search for Future Matches"}
+                            onPress={async () => {
+                                if (!pickupCoordinates || !dropoffCoordinates) {
+                                    Alert.alert("Error", "Please select valid pickup and dropoff locations first");
+                                    return;
+                                }
+                                try {
+                                    const searchData = {
+                                        pickup_latitude: pickupCoordinates.latitude,
+                                        pickup_longitude: pickupCoordinates.longitude,
+                                        pickup_address: pickupLocation,
+                                        dropoff_latitude: dropoffCoordinates.latitude,
+                                        dropoff_longitude: dropoffCoordinates.longitude,
+                                        dropoff_address: dropoffLocation,
+                                        schedule_days: days,
+                                        schedule_time: time,
+                                    };
+                                    
+                                    let response;
+                                    if (editingSearchId) {
+                                        // Update existing search
+                                        response = await riderSearchesAPI.updateSavedSearch(editingSearchId, searchData);
+                                    } else {
+                                        // Create new search
+                                        response = await riderSearchesAPI.saveSearch(searchData);
+                                    }
+                                    
+                                    if (response.data.success) {
+                                        Alert.alert(
+                                            "Success", 
+                                            editingSearchId 
+                                                ? "Search updated! We'll notify you when a matching ride becomes available."
+                                                : "Search saved! We'll notify you when a matching ride becomes available.",
+                                            [
+                                                {
+                                                    text: "OK",
+                                                    onPress: () => {
+                                                        if (editingSearchId) {
+                                                            // Navigate back to saved searches after updating
+                                                            navigation.navigate("SavedSearches");
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        );
+                                        // Clear editing state if updating
+                                        if (editingSearchId) {
+                                            setEditingSearchId(null);
+                                        }
+                                    } else {
+                                        Alert.alert("Error", response.data.message || "Failed to save search");
+                                    }
+                                } catch (error) {
+                                    console.error("Save/Update search error:", error);
+                                    let errorMessage = editingSearchId ? "Failed to update search" : "Failed to save search";
+                                    if (error.response?.data) {
+                                        if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+                                            errorMessage = error.response.data.errors.map(e => e.msg || e.message).join('\n');
+                                        } else {
+                                            errorMessage = error.response.data.message || errorMessage;
+                                        }
+                                    } else {
+                                        errorMessage = error.message || errorMessage;
+                                    }
+                                    Alert.alert("Error", errorMessage);
+                                }
+                            }}
+                            style={styles.saveSearchButton}
+                            variant="secondary"
+                        />
+                    </Card>
+                )}
+
                 {/* No Results - Show option to post driver request */}
                 {showMap && results.length === 0 && driverRequests.length === 0 && (
                     <Card style={styles.noResultsCard}>
@@ -916,50 +1017,9 @@ const SearchRideScreen = () => {
                                 />
                             </>
                         ) : (
-                            <>
-                                <Text style={styles.noResultsText}>
-                                    {"\n"}You can:
-                                </Text>
-                                <Button
-                                    title="Save Search for Future Matches"
-                                    onPress={async () => {
-                                        try {
-                                            const response = await riderSearchesAPI.saveSearch({
-                                                pickup_latitude: pickupCoordinates.latitude,
-                                                pickup_longitude: pickupCoordinates.longitude,
-                                                pickup_address: pickupLocation,
-                                                dropoff_latitude: dropoffCoordinates.latitude,
-                                                dropoff_longitude: dropoffCoordinates.longitude,
-                                                dropoff_address: dropoffLocation,
-                                                schedule_days: days,
-                                                schedule_time: time,
-                                            });
-                                            if (response.data.success) {
-                                                Alert.alert("Success", "Search saved! We'll notify you when a matching ride becomes available.");
-                                            } else {
-                                                Alert.alert("Error", response.data.message || "Failed to save search");
-                                            }
-                                        } catch (error) {
-                                            console.error("Save search error:", error);
-                                            let errorMessage = "Failed to save search";
-                                            if (error.response?.data) {
-                                                if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
-                                                    errorMessage = error.response.data.errors.map(e => e.msg || e.message).join('\n');
-                                                } else {
-                                                    errorMessage = error.response.data.message || errorMessage;
-                                                }
-                                            } else {
-                                                errorMessage = error.message || errorMessage;
-                                            }
-                                            Alert.alert("Error", errorMessage);
-                                        }
-                                    }}
-                                    style={styles.saveSearchButton}
-                                />
-                                <Text style={styles.noResultsText}>
-                                    {"\n"}Or switch to driver mode to post a ride offer!
-                                </Text>
-                            </>
+                            <Text style={styles.noResultsText}>
+                                {"\n"}Or switch to driver mode to post a ride offer!
+                            </Text>
                         )}
                     </Card>
                 )}
@@ -1224,10 +1284,16 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         backgroundColor: Colors.secondary,
     },
-    saveSearchButton: {
+    saveSearchCard: {
         marginTop: 16,
+        marginBottom: 16,
+        backgroundColor: Colors.secondary + '15', // Light green background
+        borderWidth: 1,
+        borderColor: Colors.secondary + '40',
+    },
+    saveSearchButton: {
+        marginTop: 8,
         marginBottom: 8,
-        backgroundColor: Colors.primary,
     },
 });
 

@@ -699,9 +699,9 @@ const searchRides = async (req, res, next) => {
       matches = enhancedMatches;
       
       // Filter to only return the best matches
-      // 1. Only matches with score >= 40 (slightly strict but reasonable)
+      // 1. Only matches with score >= 50 (quality threshold)
       // 2. Show at least 3 best matches if available, up to 10 max
-      const MIN_MATCH_SCORE = 40; // Minimum quality score - slightly strict
+      const MIN_MATCH_SCORE = 50; // Minimum quality score threshold
       const MIN_RESULTS = 3; // Always show at least 3 matches if available
       const MAX_RESULTS = 10; // Maximum number of results
       

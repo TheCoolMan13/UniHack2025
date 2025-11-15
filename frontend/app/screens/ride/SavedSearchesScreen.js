@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../constants/colors";
 import Header from "../../../components/common/Header";
 import Card from "../../../components/common/Card";
@@ -172,18 +173,74 @@ const SavedSearchesScreen = () => {
                             {search.status === 'active' && (
                                 <View style={styles.actionsContainer}>
                                     {search.new_matches > 0 && (
-                                        <Button
-                                            title="View Matches"
+                                        <TouchableOpacity
+                                            style={styles.actionButtonPrimary}
                                             onPress={() => navigation.navigate("NewMatches")}
-                                            style={styles.actionButton}
-                                        />
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="notifications" size={18} color={Colors.textLight} />
+                                            <Text style={styles.actionButtonPrimaryText}>View Matches</Text>
+                                        </TouchableOpacity>
                                     )}
-                                    <Button
-                                        title="Cancel Search"
-                                        onPress={() => handleCancelSearch(search.id)}
-                                        variant="outline"
-                                        style={styles.actionButton}
-                                    />
+                                    <View style={styles.actionButtonsRow}>
+                                        <TouchableOpacity
+                                            style={styles.actionIconButton}
+                                            onPress={() => {
+                                                navigation.navigate("SearchRide", {
+                                                    pickupLocation: search.pickup_address,
+                                                    dropoffLocation: search.dropoff_address,
+                                                    pickupCoordinates: {
+                                                        latitude: parseFloat(search.pickup_latitude),
+                                                        longitude: parseFloat(search.pickup_longitude),
+                                                    },
+                                                    dropoffCoordinates: {
+                                                        latitude: parseFloat(search.dropoff_latitude),
+                                                        longitude: parseFloat(search.dropoff_longitude),
+                                                    },
+                                                    time: search.schedule_time,
+                                                    days: Array.isArray(search.schedule_days) ? search.schedule_days : [],
+                                                });
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="search" size={20} color={Colors.primary} />
+                                            <Text style={styles.actionIconButtonText}>Re-Search</Text>
+                                        </TouchableOpacity>
+                                        
+                                        <TouchableOpacity
+                                            style={styles.actionIconButton}
+                                            onPress={() => {
+                                                navigation.navigate("SearchRide", {
+                                                    editingSearchId: search.id,
+                                                    pickupLocation: search.pickup_address,
+                                                    dropoffLocation: search.dropoff_address,
+                                                    pickupCoordinates: {
+                                                        latitude: parseFloat(search.pickup_latitude),
+                                                        longitude: parseFloat(search.pickup_longitude),
+                                                    },
+                                                    dropoffCoordinates: {
+                                                        latitude: parseFloat(search.dropoff_latitude),
+                                                        longitude: parseFloat(search.dropoff_longitude),
+                                                    },
+                                                    time: search.schedule_time,
+                                                    days: Array.isArray(search.schedule_days) ? search.schedule_days : [],
+                                                });
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="create-outline" size={20} color={Colors.primary} />
+                                            <Text style={styles.actionIconButtonText}>Edit</Text>
+                                        </TouchableOpacity>
+                                        
+                                        <TouchableOpacity
+                                            style={[styles.actionIconButton, styles.actionIconButtonDanger]}
+                                            onPress={() => handleCancelSearch(search.id)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                                            <Text style={[styles.actionIconButtonText, styles.actionIconButtonTextDanger]}>Delete</Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
                             )}
                         </Card>
@@ -298,12 +355,57 @@ const styles = StyleSheet.create({
         color: Colors.secondary,
     },
     actionsContainer: {
-        flexDirection: "row",
         marginTop: 16,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    actionButtonPrimary: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: Colors.primary,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        marginBottom: 12,
         gap: 8,
     },
-    actionButton: {
+    actionButtonPrimaryText: {
+        color: Colors.textLight,
+        fontSize: 15,
+        fontWeight: "600",
+    },
+    actionButtonsRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: 8,
+    },
+    actionIconButton: {
         flex: 1,
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: Colors.background,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        gap: 6,
+    },
+    actionIconButtonDanger: {
+        backgroundColor: Colors.error + '08',
+        borderColor: Colors.error + '30',
+    },
+    actionIconButtonText: {
+        color: Colors.textPrimary,
+        fontSize: 13,
+        fontWeight: "500",
+        marginTop: 2,
+    },
+    actionIconButtonTextDanger: {
+        color: Colors.error,
     },
 });
 

@@ -203,7 +203,7 @@ const searchDriverRequests = async (req, res, next) => {
     const matches = await findMatchingRides(passengerRoute, driverRoutes);
 
     // Filter and format results
-    const MIN_MATCH_SCORE = 40;
+    const MIN_MATCH_SCORE = 50;
     const MAX_RESULTS = 10;
     const MIN_RESULTS = 3;
 

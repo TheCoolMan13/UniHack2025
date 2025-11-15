@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions, Platform } from "react-native";
 import { useSafeAreaInsets, useSafeAreaFrame } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline } from "react-native-maps";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
@@ -504,7 +505,9 @@ const MyRidesScreen = () => {
                                     </Text>
                                     <Button
                                         title="View Matches"
-                                        onPress={() => navigation.navigate("NewMatches")}
+                                        onPress={() => navigation.navigate("Home", {
+                                            screen: "NewMatches"
+                                        })}
                                         style={styles.viewMatchesButton}
                                     />
                                 </View>
@@ -540,20 +543,84 @@ const MyRidesScreen = () => {
                                     )}
                                     
                                     {search.status === 'active' && (
-                                        <View style={styles.rideActions}>
+                                        <View style={styles.savedSearchActionsContainer}>
                                             {search.new_matches > 0 && (
-                                                <Button
-                                                    title="View Matches"
-                                                    onPress={() => navigation.navigate("NewMatches")}
-                                                    style={styles.actionButton}
-                                                />
+                                                <TouchableOpacity
+                                                    style={styles.savedSearchActionButtonPrimary}
+                                                    onPress={() => navigation.navigate("Home", {
+                                                        screen: "NewMatches"
+                                                    })}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Ionicons name="notifications" size={18} color={Colors.textLight} />
+                                                    <Text style={styles.savedSearchActionButtonPrimaryText}>View Matches</Text>
+                                                </TouchableOpacity>
                                             )}
-                                            <Button
-                                                title="Cancel Search"
-                                                onPress={() => handleCancelSearch(search.id)}
-                                                variant="outline"
-                                                style={styles.actionButton}
-                                            />
+                                            <View style={styles.savedSearchActionButtonsRow}>
+                                                <TouchableOpacity
+                                                    style={styles.savedSearchActionIconButton}
+                                                    onPress={() => {
+                                                        navigation.navigate("Home", {
+                                                            screen: "SearchRide",
+                                                            params: {
+                                                                pickupLocation: search.pickup_address,
+                                                                dropoffLocation: search.dropoff_address,
+                                                                pickupCoordinates: {
+                                                                    latitude: parseFloat(search.pickup_latitude),
+                                                                    longitude: parseFloat(search.pickup_longitude),
+                                                                },
+                                                                dropoffCoordinates: {
+                                                                    latitude: parseFloat(search.dropoff_latitude),
+                                                                    longitude: parseFloat(search.dropoff_longitude),
+                                                                },
+                                                                time: search.schedule_time,
+                                                                days: Array.isArray(search.schedule_days) ? search.schedule_days : [],
+                                                            },
+                                                        });
+                                                    }}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Ionicons name="search" size={20} color={Colors.primary} />
+                                                    <Text style={styles.savedSearchActionIconButtonText}>Re-Search</Text>
+                                                </TouchableOpacity>
+                                                
+                                                <TouchableOpacity
+                                                    style={styles.savedSearchActionIconButton}
+                                                    onPress={() => {
+                                                        navigation.navigate("Home", {
+                                                            screen: "SearchRide",
+                                                            params: {
+                                                                editingSearchId: search.id,
+                                                                pickupLocation: search.pickup_address,
+                                                                dropoffLocation: search.dropoff_address,
+                                                                pickupCoordinates: {
+                                                                    latitude: parseFloat(search.pickup_latitude),
+                                                                    longitude: parseFloat(search.pickup_longitude),
+                                                                },
+                                                                dropoffCoordinates: {
+                                                                    latitude: parseFloat(search.dropoff_latitude),
+                                                                    longitude: parseFloat(search.dropoff_longitude),
+                                                                },
+                                                                time: search.schedule_time,
+                                                                days: Array.isArray(search.schedule_days) ? search.schedule_days : [],
+                                                            },
+                                                        });
+                                                    }}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Ionicons name="create-outline" size={20} color={Colors.primary} />
+                                                    <Text style={styles.savedSearchActionIconButtonText}>Edit</Text>
+                                                </TouchableOpacity>
+                                                
+                                                <TouchableOpacity
+                                                    style={[styles.savedSearchActionIconButton, styles.savedSearchActionIconButtonDanger]}
+                                                    onPress={() => handleCancelSearch(search.id)}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                                                    <Text style={[styles.savedSearchActionIconButtonText, styles.savedSearchActionIconButtonTextDanger]}>Delete</Text>
+                                                </TouchableOpacity>
+                                            </View>
                                         </View>
                                     )}
                                 </Card>
@@ -1605,6 +1672,59 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         marginTop: 12,
         gap: 8,
+    },
+    savedSearchActionsContainer: {
+        marginTop: 16,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    savedSearchActionButtonPrimary: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: Colors.primary,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        marginBottom: 12,
+        gap: 8,
+    },
+    savedSearchActionButtonPrimaryText: {
+        color: Colors.textLight,
+        fontSize: 15,
+        fontWeight: "600",
+    },
+    savedSearchActionButtonsRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: 8,
+    },
+    savedSearchActionIconButton: {
+        flex: 1,
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: Colors.background,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        gap: 6,
+    },
+    savedSearchActionIconButtonDanger: {
+        backgroundColor: Colors.error + '08',
+        borderColor: Colors.error + '30',
+    },
+    savedSearchActionIconButtonText: {
+        color: Colors.textPrimary,
+        fontSize: 13,
+        fontWeight: "500",
+        marginTop: 2,
+    },
+    savedSearchActionIconButtonTextDanger: {
+        color: Colors.error,
     },
 });
 

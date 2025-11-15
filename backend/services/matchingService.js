@@ -562,8 +562,8 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         reasons.push(`Very large detour (+${detourDistance.toFixed(2)}km)`);
       }
 
-      // Only include if there's a meaningful match - lowered threshold for more matches
-      if (matchScore >= 20) {
+      // Only include if there's a meaningful match - threshold set to 50 for quality matches
+      if (matchScore >= 50) {
         const match = {
           ...driverRoute,
           matchScore,
@@ -672,7 +672,7 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
           reasons.push('Days match');
         }
 
-        if (matchScore >= 20) {
+        if (matchScore >= 50) {
           matches.push({
             ...driverRoute,
             matchScore,

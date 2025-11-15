@@ -133,6 +133,7 @@ export const routesAPI = {
 export const riderSearchesAPI = {
     saveSearch: (searchParams) => api.post("/rider-searches", searchParams),
     getMySavedSearches: () => api.get("/rider-searches"),
+    updateSavedSearch: (searchId, searchParams) => api.put(`/rider-searches/${searchId}`, searchParams),
     cancelSavedSearch: (searchId) => api.delete(`/rider-searches/${searchId}`),
     getNewMatches: () => api.get("/rider-searches/matches/new"),
     markMatchViewed: (matchId) => api.put(`/rider-searches/matches/${matchId}/viewed`),

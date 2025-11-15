@@ -49,6 +49,40 @@ router.get(
 );
 
 /**
+ * @route   PUT /api/rider-searches/:id
+ * @desc    Update a saved search
+ * @access  Private
+ */
+router.put(
+  '/:id',
+  authenticate,
+  [
+    param('id').toInt().isInt({ min: 1 }).withMessage('Search ID must be a valid integer'),
+    body('pickup_latitude').customSanitizer(value => {
+      const num = parseFloat(value);
+      return isNaN(num) ? value : num;
+    }).isFloat({ min: -90, max: 90 }).withMessage('Pickup latitude must be a valid number between -90 and 90'),
+    body('pickup_longitude').customSanitizer(value => {
+      const num = parseFloat(value);
+      return isNaN(num) ? value : num;
+    }).isFloat({ min: -180, max: 180 }).withMessage('Pickup longitude must be a valid number between -180 and 180'),
+    body('pickup_address').trim().notEmpty().withMessage('Pickup address is required'),
+    body('dropoff_latitude').customSanitizer(value => {
+      const num = parseFloat(value);
+      return isNaN(num) ? value : num;
+    }).isFloat({ min: -90, max: 90 }).withMessage('Dropoff latitude must be a valid number between -90 and 90'),
+    body('dropoff_longitude').customSanitizer(value => {
+      const num = parseFloat(value);
+      return isNaN(num) ? value : num;
+    }).isFloat({ min: -180, max: 180 }).withMessage('Dropoff longitude must be a valid number between -180 and 180'),
+    body('dropoff_address').trim().notEmpty().withMessage('Dropoff address is required'),
+    body('schedule_days').isArray({ min: 1 }).withMessage('At least one schedule day is required'),
+    body('schedule_time').trim().notEmpty().withMessage('Schedule time is required')
+  ],
+  riderSearchesController.updateSavedSearch
+);
+
+/**
  * @route   DELETE /api/rider-searches/:id
  * @desc    Cancel a saved search
  * @access  Private

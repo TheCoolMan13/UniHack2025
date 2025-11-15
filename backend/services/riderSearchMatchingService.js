@@ -6,7 +6,7 @@
 const db = require('../config/database');
 const { findMatchingRides } = require('./matchingService');
 
-const MIN_MATCH_SCORE = 40; // Same threshold as regular search
+const MIN_MATCH_SCORE = 50; // Minimum quality score threshold
 
 /**
  * Check all active rider searches against a newly created ride

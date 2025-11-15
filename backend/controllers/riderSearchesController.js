@@ -355,10 +355,104 @@ const dismissMatch = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Update a saved search
+ * @route   PUT /api/rider-searches/:id
+ * @access  Private
+ */
+const updateSavedSearch = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { id } = req.params;
+    const {
+      pickup_latitude,
+      pickup_longitude,
+      pickup_address,
+      dropoff_latitude,
+      dropoff_longitude,
+      dropoff_address,
+      schedule_days,
+      schedule_time
+    } = req.body;
+
+    // Verify search belongs to user
+    const [searches] = await db.execute(
+      `SELECT * FROM rider_searches WHERE id = ? AND passenger_id = ?`,
+      [id, req.user.id]
+    );
+
+    if (!searches || searches.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Search not found'
+      });
+    }
+
+    // Update search
+    await db.execute(
+      `UPDATE rider_searches SET
+        pickup_latitude = ?,
+        pickup_longitude = ?,
+        pickup_address = ?,
+        dropoff_latitude = ?,
+        dropoff_longitude = ?,
+        dropoff_address = ?,
+        schedule_days = ?,
+        schedule_time = ?,
+        status = 'active'
+       WHERE id = ?`,
+      [
+        parseFloat(pickup_latitude),
+        parseFloat(pickup_longitude),
+        pickup_address,
+        parseFloat(dropoff_latitude),
+        parseFloat(dropoff_longitude),
+        dropoff_address,
+        JSON.stringify(schedule_days),
+        schedule_time,
+        id
+      ]
+    );
+
+    // Get updated search
+    const [updatedSearches] = await db.execute(
+      `SELECT * FROM rider_searches WHERE id = ?`,
+      [id]
+    );
+
+    const search = updatedSearches[0];
+    if (search.schedule_days && typeof search.schedule_days === 'string') {
+      try {
+        search.schedule_days = JSON.parse(search.schedule_days);
+      } catch (e) {
+        search.schedule_days = [];
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Search updated successfully',
+      data: { search }
+    });
+  } catch (error) {
+    console.error('Update saved search error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   saveRiderSearch,
   getMySavedSearches,
   cancelSavedSearch,
+  updateSavedSearch,
   getNewMatches,
   markMatchViewed,
   dismissMatch

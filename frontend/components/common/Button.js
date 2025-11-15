@@ -35,19 +35,30 @@ const Button = ({
     };
 
     const getTextStyle = () => {
+        const baseStyles = [styles.buttonText];
+        
         if (disabled || loading) {
-            return [styles.buttonText, styles.buttonTextDisabled, textStyle];
+            baseStyles.push(styles.buttonTextDisabled);
+        } else {
+            switch (variant) {
+                case "primary":
+                case "secondary":
+                    baseStyles.push(styles.buttonTextLight);
+                    break;
+                case "outline":
+                    baseStyles.push(styles.buttonTextPrimary);
+                    break;
+                default:
+                    baseStyles.push(styles.buttonTextLight);
+            }
         }
         
-        switch (variant) {
-            case "primary":
-            case "secondary":
-                return [styles.buttonText, styles.buttonTextLight, textStyle];
-            case "outline":
-                return [styles.buttonText, styles.buttonTextPrimary, textStyle];
-            default:
-                return [styles.buttonText, styles.buttonTextLight, textStyle];
+        // Apply custom textStyle last to override defaults
+        if (textStyle) {
+            baseStyles.push(textStyle);
         }
+        
+        return baseStyles;
     };
 
     return (

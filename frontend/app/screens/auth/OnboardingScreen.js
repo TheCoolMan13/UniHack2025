@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { View, Text, StyleSheet, Dimensions, ScrollView, TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
@@ -14,6 +14,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const OnboardingScreen = () => {
     const navigation = useNavigation();
     const [currentSlide, setCurrentSlide] = useState(0);
+    const scrollViewRef = useRef(null);
 
     const slides = [
         {
@@ -35,7 +36,12 @@ const OnboardingScreen = () => {
 
     const handleNext = () => {
         if (currentSlide < slides.length - 1) {
-            setCurrentSlide(currentSlide + 1);
+            const nextSlide = currentSlide + 1;
+            setCurrentSlide(nextSlide);
+            scrollViewRef.current?.scrollTo({
+                x: nextSlide * SCREEN_WIDTH,
+                animated: true,
+            });
         } else {
             navigation.navigate("Login");
         }
@@ -48,9 +54,11 @@ const OnboardingScreen = () => {
     return (
         <View style={styles.container}>
             <ScrollView
+                ref={scrollViewRef}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
+                scrollEnabled={true}
                 onMomentumScrollEnd={(event) => {
                     const slideIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
                     setCurrentSlide(slideIndex);

@@ -3,13 +3,10 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const db = require('../config/database');
 
-/**
- * Generate JWT token
- */
 const generateToken = (userId) => {
   return jwt.sign(
     { userId },
-    process.env.JWT_SECRET,
+    process.env.JWT_SECRET || 'your-secret-key',
     { expiresIn: process.env.JWT_EXPIRE || '7d' }
   );
 };
@@ -92,7 +89,6 @@ const register = async (req, res) => {
  */
 const login = async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -104,7 +100,7 @@ const login = async (req, res) => {
 
     const { email, password } = req.body;
 
-    // Find user
+    // Find user by email
     const [users] = await db.execute(
       'SELECT * FROM users WHERE email = ?',
       [email]
@@ -119,7 +115,7 @@ const login = async (req, res) => {
 
     const user = users[0];
 
-    // Verify password
+    // Check password
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({
@@ -131,7 +127,7 @@ const login = async (req, res) => {
     // Generate token
     const token = generateToken(user.id);
 
-    // Remove password from response
+    // Remove password from user object
     delete user.password_hash;
 
     res.json({
@@ -196,31 +192,96 @@ const getCurrentUser = async (req, res) => {
 };
 
 /**
+ * @desc    Update user profile
+ * @route   PUT /api/auth/profile
+ * @access  Private
+ */
+const updateProfile = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { name, phone, role } = req.body;
+    const userId = req.user.id;
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+
+    if (name !== undefined) {
+      updates.push('name = ?');
+      values.push(name);
+    }
+    if (phone !== undefined) {
+      updates.push('phone = ?');
+      values.push(phone || null);
+    }
+    if (role !== undefined) {
+      updates.push('role = ?');
+      values.push(role);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update'
+      });
+    }
+
+    values.push(userId);
+
+    // Update user
+    await db.execute(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    // Get updated user
+    const [users] = await db.execute(
+      'SELECT id, email, name, phone, role, rating, verified, avatar_url, created_at FROM users WHERE id = ?',
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        user: users[0]
+      }
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating profile'
+    });
+  }
+};
+
+/**
  * @desc    Logout user
  * @route   POST /api/auth/logout
  * @access  Private
  */
 const logout = async (req, res) => {
-  try {
-    // Optional: Implement token blacklisting here
-    // For now, just return success (client will remove token)
-    res.json({
-      success: true,
-      message: 'Logout successful'
-    });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error during logout'
-    });
-  }
+  // For JWT, logout is typically handled client-side by removing the token
+  // This endpoint can be used for token blacklisting if needed
+  res.json({
+    success: true,
+    message: 'Logged out successfully'
+  });
 };
 
 module.exports = {
   register,
   login,
   getCurrentUser,
+  updateProfile,
   logout
 };
-

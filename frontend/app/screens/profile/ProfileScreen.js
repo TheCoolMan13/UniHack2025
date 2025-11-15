@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../../context/AuthContext";
 import { Colors } from "../../../constants/colors";
 import Header from "../../../components/common/Header";
@@ -12,6 +13,7 @@ import Button from "../../../components/common/Button";
  */
 
 const ProfileScreen = () => {
+    const navigation = useNavigation();
     const { user, logout } = useAuth();
 
     const handleLogout = () => {
@@ -43,14 +45,16 @@ const ProfileScreen = () => {
                     </View>
                 </View>
                 <Text style={styles.name}>{user?.name || "User"}</Text>
-                <Text style={styles.email}>{user?.email || ""}</Text>
+                {user?.email ? (
+                    <Text style={styles.email}>{user.email}</Text>
+                ) : null}
                 <View style={styles.ratingContainer}>
                     <Text style={styles.rating}>⭐ {user?.rating || 0}</Text>
-                    {user?.verified && (
+                    {user?.verified ? (
                         <View style={styles.verifiedBadge}>
                             <Text style={styles.verifiedText}>✓ Verified</Text>
                         </View>
-                    )}
+                    ) : null}
                 </View>
             </Card>
 
@@ -73,28 +77,40 @@ const ProfileScreen = () => {
             <Card style={styles.settingsCard}>
                 <Text style={styles.sectionTitle}>Settings</Text>
                 
-                <TouchableOpacity style={styles.settingItem}>
+                <TouchableOpacity 
+                    style={styles.settingItem}
+                    onPress={() => navigation.navigate("EditProfile")}
+                >
                     <Text style={styles.settingText}>Edit Profile</Text>
                     <Text style={styles.settingArrow}>→</Text>
                 </TouchableOpacity>
                 
                 <View style={styles.divider} />
                 
-                <TouchableOpacity style={styles.settingItem}>
+                <TouchableOpacity 
+                    style={styles.settingItem}
+                    onPress={() => Alert.alert("Coming Soon", "Payment methods feature will be available soon.")}
+                >
                     <Text style={styles.settingText}>Payment Methods</Text>
                     <Text style={styles.settingArrow}>→</Text>
                 </TouchableOpacity>
                 
                 <View style={styles.divider} />
                 
-                <TouchableOpacity style={styles.settingItem}>
+                <TouchableOpacity 
+                    style={styles.settingItem}
+                    onPress={() => Alert.alert("Coming Soon", "Notifications settings will be available soon.")}
+                >
                     <Text style={styles.settingText}>Notifications</Text>
                     <Text style={styles.settingArrow}>→</Text>
                 </TouchableOpacity>
                 
                 <View style={styles.divider} />
                 
-                <TouchableOpacity style={styles.settingItem}>
+                <TouchableOpacity 
+                    style={styles.settingItem}
+                    onPress={() => Alert.alert("Help & Support", "For support, please contact us at support@carshare.com")}
+                >
                     <Text style={styles.settingText}>Help & Support</Text>
                     <Text style={styles.settingArrow}>→</Text>
                 </TouchableOpacity>
@@ -160,7 +176,7 @@ const styles = StyleSheet.create({
     ratingContainer: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        justifyContent: "center",
     },
     rating: {
         fontSize: 16,
@@ -171,6 +187,7 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 8,
         backgroundColor: Colors.secondary + "20",
+        marginLeft: 12,
     },
     verifiedText: {
         fontSize: 12,

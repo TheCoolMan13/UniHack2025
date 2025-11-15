@@ -43,6 +43,22 @@ router.post(
 router.get('/me', authenticate, authController.getCurrentUser);
 
 /**
+ * @route   PUT /api/auth/profile
+ * @desc    Update user profile
+ * @access  Private
+ */
+router.put(
+  '/profile',
+  authenticate,
+  [
+    body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
+    body('phone').optional().trim(),
+    body('role').optional().isIn(['driver', 'passenger', 'both']).withMessage('Role must be driver, passenger, or both')
+  ],
+  authController.updateProfile
+);
+
+/**
  * @route   POST /api/auth/logout
  * @desc    Logout user (optional - for token blacklisting)
  * @access  Private

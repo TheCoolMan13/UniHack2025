@@ -17,6 +17,7 @@ import DeliverPackageScreen from "../screens/ride/DeliverPackageScreen";
 import LocationSelectionScreen from "../screens/map/LocationSelectionScreen";
 import SavedSearchesScreen from "../screens/ride/SavedSearchesScreen";
 import NewMatchesScreen from "../screens/ride/NewMatchesScreen";
+import EditProfileScreen from "../screens/profile/EditProfileScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -95,6 +96,31 @@ const HomeStack = () => {
 };
 
 /**
+ * Profile Stack Navigator
+ * Contains ProfileScreen and related screens
+ */
+const ProfileStack = () => {
+    return (
+        <Stack.Navigator
+            initialRouteName="ProfileMain"
+            screenOptions={{
+                headerShown: false,
+            }}
+        >
+            <Stack.Screen name="ProfileMain" component={ProfileScreen} />
+            <Stack.Screen
+                name="EditProfile"
+                component={EditProfileScreen}
+                options={{
+                    presentation: "card",
+                    headerShown: false,
+                }}
+            />
+        </Stack.Navigator>
+    );
+};
+
+/**
  * Main Tab Navigator
  * Bottom tab navigation for authenticated users
  */
@@ -136,7 +162,7 @@ const MainNavigator = () => {
             <Tab.Screen name="Home" component={HomeStack} />
             <Tab.Screen name="Map" component={MapScreen} />
             <Tab.Screen name="MyRides" component={MyRidesScreen} />
-            <Tab.Screen name="Profile" component={ProfileScreen} />
+            <Tab.Screen name="Profile" component={ProfileStack} />
         </Tab.Navigator>
     );
 };

@@ -58,6 +58,12 @@ const PostRideScreen = () => {
         if (route.params?.dropoffCoordinates) {
             setDropoffCoordinates(route.params.dropoffCoordinates);
         }
+        if (route.params?.time) {
+            setTime(route.params.time);
+        }
+        if (route.params?.days && Array.isArray(route.params.days)) {
+            setDays(route.params.days);
+        }
     }, []);
 
     // Also listen for params changes (not just on focus)
@@ -414,6 +420,22 @@ const PostRideScreen = () => {
                     loading={loading}
                     style={styles.postButton}
                 />
+                
+                <Card style={styles.card}>
+                    <Text style={styles.alternativeText}>
+                        Can't find riders? Post a "Looking for Riders" request instead!
+                    </Text>
+                    <Button
+                        title="Post Looking for Riders Request"
+                        onPress={() => navigation.navigate("PostDriverRequest", {
+                            pickupLocation,
+                            dropoffLocation,
+                            pickupCoordinates,
+                            dropoffCoordinates,
+                        })}
+                        style={[styles.postButton, { backgroundColor: Colors.secondary }]}
+                    />
+                </Card>
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -457,6 +479,12 @@ const styles = StyleSheet.create({
     },
     postButton: {
         marginTop: 8,
+    },
+    alternativeText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        textAlign: "center",
+        marginBottom: 12,
     },
 });
 

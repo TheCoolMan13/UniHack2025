@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { useAuth } from "../../../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../constants/colors";
 import Header from "../../../components/common/Header";
 import Card from "../../../components/common/Card";
 import Button from "../../../components/common/Button";
-import { ridesAPI, routesAPI } from "../../../services/api";
+import { ridesAPI, routesAPI, riderSearchesAPI } from "../../../services/api";
 import { decodePolyline } from "../../../utils/polyline";
 import { MAP_CONFIG } from "../../../constants/config";
 
@@ -18,9 +19,11 @@ import { MAP_CONFIG } from "../../../constants/config";
 
 const MyRidesScreen = () => {
     const { currentRole, user } = useAuth();
-    const [activeTab, setActiveTab] = useState("requested"); // 'requested' or 'offered'
+    const navigation = useNavigation();
+    const [activeTab, setActiveTab] = useState("requested"); // 'requested', 'offered', or 'saved'
     const [requestedRides, setRequestedRides] = useState([]); // Rides user requested as passenger
     const [offeredRides, setOfferedRides] = useState([]); // Rides user posted as driver
+    const [newMatchesCount, setNewMatchesCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showMapModal, setShowMapModal] = useState(false);
@@ -34,7 +37,20 @@ const MyRidesScreen = () => {
     // Fetch rides from API
     useEffect(() => {
         fetchAllRides();
+        fetchNewMatchesCount(); // Always fetch to show badge count
     }, [activeTab]);
+
+    const fetchNewMatchesCount = async () => {
+        try {
+            const response = await riderSearchesAPI.getNewMatches();
+            if (response.data.success) {
+                const matches = response.data.data.matches || [];
+                setNewMatchesCount(matches.length);
+            }
+        } catch (error) {
+            console.error("Fetch new matches count error:", error);
+        }
+    };
 
     const fetchAllRides = async () => {
         try {
@@ -120,6 +136,7 @@ const MyRidesScreen = () => {
     const handleRefresh = () => {
         setRefreshing(true);
         fetchAllRides();
+        fetchNewMatchesCount();
     };
 
     const handleAcceptRequest = async (rideId, requestId) => {
@@ -390,6 +407,23 @@ const MyRidesScreen = () => {
                         Offered Rides
                     </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === "saved" && styles.tabActive]}
+                    onPress={() => setActiveTab("saved")}
+                >
+                    <View style={styles.tabWithBadge}>
+                        <Text
+                            style={[styles.tabText, activeTab === "saved" && styles.tabTextActive]}
+                        >
+                            Saved Searches
+                        </Text>
+                        {newMatchesCount > 0 && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>{newMatchesCount}</Text>
+                            </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
             </View>
 
             <ScrollView 
@@ -402,6 +436,34 @@ const MyRidesScreen = () => {
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color={Colors.primary} />
                         <Text style={styles.loadingText}>Loading rides...</Text>
+                    </View>
+                ) : activeTab === "saved" ? (
+                    <View style={styles.savedSearchesContainer}>
+                        {newMatchesCount > 0 && (
+                            <Card style={styles.newMatchesBanner}>
+                                <View style={styles.newMatchesContent}>
+                                    <Text style={styles.newMatchesText}>
+                                        🎉 You have {newMatchesCount} new match{newMatchesCount > 1 ? 'es' : ''}!
+                                    </Text>
+                                    <Button
+                                        title="View Matches"
+                                        onPress={() => navigation.navigate("NewMatches")}
+                                        style={styles.viewMatchesButton}
+                                    />
+                                </View>
+                            </Card>
+                        )}
+                        <Card style={styles.savedSearchesCard}>
+                            <Text style={styles.savedSearchesTitle}>Saved Searches</Text>
+                            <Text style={styles.savedSearchesText}>
+                                View and manage your saved searches for future matches.
+                            </Text>
+                            <Button
+                                title="View Saved Searches"
+                                onPress={() => navigation.navigate("SavedSearches")}
+                                style={styles.viewSavedSearchesButton}
+                            />
+                        </Card>
                     </View>
                 ) : (activeTab === "requested" ? requestedRides : offeredRides).length === 0 ? (
                     <View style={styles.emptyContainer}>
@@ -1133,6 +1195,67 @@ const styles = StyleSheet.create({
     cancelButtonText: {
         fontSize: 14,
         fontWeight: "600",
+    },
+    tabWithBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    badge: {
+        backgroundColor: Colors.secondary,
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        paddingHorizontal: 6,
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    badgeText: {
+        color: "#FFFFFF",
+        fontSize: 12,
+        fontWeight: "bold",
+    },
+    savedSearchesContainer: {
+        padding: 16,
+    },
+    newMatchesBanner: {
+        backgroundColor: Colors.secondary + '20',
+        borderColor: Colors.secondary,
+        borderWidth: 2,
+        marginBottom: 16,
+    },
+    newMatchesContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    newMatchesText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.textPrimary,
+        flex: 1,
+    },
+    viewMatchesButton: {
+        marginLeft: 12,
+        paddingHorizontal: 16,
+    },
+    savedSearchesCard: {
+        padding: 20,
+    },
+    savedSearchesTitle: {
+        fontSize: 20,
+        fontWeight: "bold",
+        color: Colors.textPrimary,
+        marginBottom: 12,
+    },
+    savedSearchesText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        marginBottom: 16,
+        lineHeight: 20,
+    },
+    viewSavedSearchesButton: {
+        marginTop: 8,
     },
 });
 

@@ -86,6 +86,22 @@ export const ridesAPI = {
 };
 
 /**
+ * Driver Requests API (Looking for Riders)
+ */
+export const driverRequestsAPI = {
+    // Driver endpoints
+    createDriverRequest: (requestData) => api.post("/driver-requests", requestData),
+    getMyDriverRequests: () => api.get("/driver-requests"),
+    cancelDriverRequest: (requestId) => api.delete(`/driver-requests/${requestId}`),
+    acceptResponse: (requestId, responseId) => api.post(`/driver-requests/${requestId}/accept-response`, { response_id: responseId }),
+    rejectResponse: (requestId, responseId) => api.post(`/driver-requests/${requestId}/reject-response`, { response_id: responseId }),
+    
+    // Passenger endpoints
+    searchDriverRequests: (searchParams) => api.post("/driver-requests/search", searchParams),
+    respondToDriverRequest: (requestId, responseData) => api.post(`/driver-requests/${requestId}/respond`, responseData),
+};
+
+/**
  * Matching API
  */
 export const matchingAPI = {
@@ -108,6 +124,18 @@ export const routesAPI = {
     calculateRoute: (origin, destination) => api.post("/routes/calculate", { origin, destination }),
     calculateRouteWithWaypoints: (origin, waypoints, destination) => 
         api.post("/routes/calculate-with-waypoints", { origin, waypoints, destination }),
+};
+
+/**
+ * Rider Searches API (Saved Searches for Future Matches)
+ */
+export const riderSearchesAPI = {
+    saveSearch: (searchParams) => api.post("/rider-searches", searchParams),
+    getMySavedSearches: () => api.get("/rider-searches"),
+    cancelSavedSearch: (searchId) => api.delete(`/rider-searches/${searchId}`),
+    getNewMatches: () => api.get("/rider-searches/matches/new"),
+    markMatchViewed: (matchId) => api.put(`/rider-searches/matches/${matchId}/viewed`),
+    dismissMatch: (matchId) => api.put(`/rider-searches/matches/${matchId}/dismiss`),
 };
 
 export default api;

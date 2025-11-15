@@ -212,7 +212,11 @@ const getNewMatches = async (req, res, next) => {
         rsm.status,
         rsm.created_at as match_created_at,
         rs.id as search_id,
+        rs.pickup_latitude as search_pickup_latitude,
+        rs.pickup_longitude as search_pickup_longitude,
         rs.pickup_address as search_pickup,
+        rs.dropoff_latitude as search_dropoff_latitude,
+        rs.dropoff_longitude as search_dropoff_longitude,
         rs.dropoff_address as search_dropoff,
         r.id as ride_id,
         r.pickup_latitude,
@@ -253,6 +257,11 @@ const getNewMatches = async (req, res, next) => {
       match.dropoff_latitude = parseFloat(match.dropoff_latitude);
       match.dropoff_longitude = parseFloat(match.dropoff_longitude);
       match.price = parseFloat(match.price);
+      // Parse passenger search coordinates
+      match.search_pickup_latitude = parseFloat(match.search_pickup_latitude);
+      match.search_pickup_longitude = parseFloat(match.search_pickup_longitude);
+      match.search_dropoff_latitude = parseFloat(match.search_dropoff_latitude);
+      match.search_dropoff_longitude = parseFloat(match.search_dropoff_longitude);
       return match;
     });
 

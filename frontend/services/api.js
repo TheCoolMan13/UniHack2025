@@ -76,7 +76,7 @@ export const ridesAPI = {
     
     // Passenger endpoints
     searchRides: (searchParams) => api.post("/rides/search", searchParams),
-    requestRide: (rideId) => api.post(`/rides/${rideId}/request`),
+    requestRide: (rideId, passengerLocations) => api.post(`/rides/${rideId}/request`, passengerLocations),
     
     // Common endpoints
     getActiveRides: () => api.get("/rides/active"), // Get all active rides for map

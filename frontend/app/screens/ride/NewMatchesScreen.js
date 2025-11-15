@@ -46,9 +46,24 @@ const NewMatchesScreen = () => {
         fetchNewMatches();
     };
 
-    const handleRequestRide = async (rideId, matchId) => {
+    const handleRequestRide = async (rideId, matchId, match) => {
         try {
-            const response = await ridesAPI.requestRide(rideId);
+            // Get passenger locations from the match (from saved search)
+            if (!match.search_pickup_latitude || !match.search_dropoff_latitude) {
+                Alert.alert("Error", "Missing passenger location information");
+                return;
+            }
+            
+            const passengerLocations = {
+                pickup_latitude: match.search_pickup_latitude,
+                pickup_longitude: match.search_pickup_longitude,
+                pickup_address: match.search_pickup,
+                dropoff_latitude: match.search_dropoff_latitude,
+                dropoff_longitude: match.search_dropoff_longitude,
+                dropoff_address: match.search_dropoff,
+            };
+            
+            const response = await ridesAPI.requestRide(rideId, passengerLocations);
             if (response.data.success) {
                 // Mark match as requested
                 await riderSearchesAPI.markMatchViewed(matchId).catch(() => {});
@@ -178,7 +193,7 @@ const NewMatchesScreen = () => {
                                 <View style={styles.actionsContainer}>
                                     <Button
                                         title="Request Ride"
-                                        onPress={() => handleRequestRide(match.ride_id, match.match_id)}
+                                        onPress={() => handleRequestRide(match.ride_id, match.match_id, match)}
                                         style={styles.requestButton}
                                     />
                                     <Button

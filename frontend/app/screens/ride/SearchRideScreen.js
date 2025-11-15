@@ -829,8 +829,20 @@ const SearchRideScreen = () => {
                                         <Button
                                             title="Request Ride"
                                             onPress={async () => {
+                                                if (!pickupCoordinates || !dropoffCoordinates) {
+                                                    Alert.alert("Error", "Please select pickup and dropoff locations first");
+                                                    return;
+                                                }
                                                 try {
-                                                    const response = await ridesAPI.requestRide(ride.id);
+                                                    const passengerLocations = {
+                                                        pickup_latitude: pickupCoordinates.latitude,
+                                                        pickup_longitude: pickupCoordinates.longitude,
+                                                        pickup_address: pickupLocation,
+                                                        dropoff_latitude: dropoffCoordinates.latitude,
+                                                        dropoff_longitude: dropoffCoordinates.longitude,
+                                                        dropoff_address: dropoffLocation,
+                                                    };
+                                                    const response = await ridesAPI.requestRide(ride.id, passengerLocations);
                                                     if (response.data.success) {
                                                         Alert.alert("Success", "Ride request sent! The driver will be notified.");
                                                     } else {

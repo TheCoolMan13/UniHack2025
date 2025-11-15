@@ -183,7 +183,14 @@ const getMyRides = async (req, res) => {
            ORDER BY rr.created_at DESC`,
           [ride.id]
         );
-        ride.pending_requests = pendingRequests;
+        // Parse coordinates for pending requests
+        ride.pending_requests = pendingRequests.map(req => ({
+          ...req,
+          pickup_latitude: parseFloat(req.pickup_latitude),
+          pickup_longitude: parseFloat(req.pickup_longitude),
+          dropoff_latitude: parseFloat(req.dropoff_latitude),
+          dropoff_longitude: parseFloat(req.dropoff_longitude),
+        }));
         
         // Get accepted requests
         const [acceptedRequests] = await db.execute(
@@ -198,7 +205,14 @@ const getMyRides = async (req, res) => {
            ORDER BY rr.created_at DESC`,
           [ride.id]
         );
-        ride.accepted_requests = acceptedRequests;
+        // Parse coordinates for accepted requests
+        ride.accepted_requests = acceptedRequests.map(req => ({
+          ...req,
+          pickup_latitude: parseFloat(req.pickup_latitude),
+          pickup_longitude: parseFloat(req.pickup_longitude),
+          dropoff_latitude: parseFloat(req.dropoff_latitude),
+          dropoff_longitude: parseFloat(req.dropoff_longitude),
+        }));
       }
     } else {
       // Get ride requests made by user as passenger
@@ -828,7 +842,16 @@ const requestRide = async (req, res, next) => {
       dropoff_address
     } = req.body;
 
-    // Create ride request
+    // Validate that passenger locations are provided
+    if (!pickup_latitude || !pickup_longitude || !pickup_address ||
+        !dropoff_latitude || !dropoff_longitude || !dropoff_address) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passenger pickup and dropoff locations are required'
+      });
+    }
+
+    // Create ride request with passenger's locations (not driver's)
     const [result] = await db.execute(
       `INSERT INTO ride_requests (
         ride_id, passenger_id,
@@ -838,12 +861,12 @@ const requestRide = async (req, res, next) => {
       [
         id,
         userId,
-        pickup_latitude || ride.pickup_latitude,
-        pickup_longitude || ride.pickup_longitude,
-        pickup_address || ride.pickup_address,
-        dropoff_latitude || ride.dropoff_latitude,
-        dropoff_longitude || ride.dropoff_longitude,
-        dropoff_address || ride.dropoff_address
+        parseFloat(pickup_latitude),
+        parseFloat(pickup_longitude),
+        pickup_address,
+        parseFloat(dropoff_latitude),
+        parseFloat(dropoff_longitude),
+        dropoff_address
       ]
     );
 

@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const db = require('../config/database');
 const { findMatchingRides } = require('../services/matchingService');
+const { checkRiderSearchesForNewRide } = require('../services/riderSearchMatchingService');
 
 /**
  * @desc    Create a new ride
@@ -103,6 +104,12 @@ const createRide = async (req, res, next) => {
     ride.price = parseFloat(ride.price);
 
     console.log('Ride created successfully:', ride.id);
+
+    // Check saved rider searches for matches (async, don't wait)
+    checkRiderSearchesForNewRide(ride.id).catch(err => {
+      console.error('Error checking rider searches for new ride:', err);
+      // Don't fail the request if this fails
+    });
 
     return res.status(201).json({
       success: true,

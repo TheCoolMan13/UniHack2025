@@ -8,7 +8,8 @@ import Input from "../../../components/common/Input";
 import Button from "../../../components/common/Button";
 import Card from "../../../components/common/Card";
 import TimePicker from "../../../components/common/TimePicker";
-import { ridesAPI, routesAPI } from "../../../services/api";
+import { ridesAPI, routesAPI, driverRequestsAPI, riderSearchesAPI } from "../../../services/api";
+import { useAuth } from "../../../context/AuthContext";
 import { getLocationSelectionResult } from "../map/LocationSelectionScreen";
 import { decodePolyline } from "../../../utils/polyline";
 import { MAP_CONFIG } from "../../../constants/config";
@@ -21,6 +22,7 @@ import { MAP_CONFIG } from "../../../constants/config";
 const SearchRideScreen = () => {
     const navigation = useNavigation();
     const route = useRoute();
+    const { currentRole, user } = useAuth();
     const [pickupLocation, setPickupLocation] = useState("");
     const [dropoffLocation, setDropoffLocation] = useState("");
     const [pickupCoordinates, setPickupCoordinates] = useState(null);
@@ -29,6 +31,7 @@ const SearchRideScreen = () => {
     const [days, setDays] = useState([]);
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState([]);
+    const [driverRequests, setDriverRequests] = useState([]); // Driver requests (drivers looking for riders)
     const [showMap, setShowMap] = useState(false); // Show map after search
     const [passengerRoute, setPassengerRoute] = useState(null); // Passenger route polyline
     const [selectedDriver, setSelectedDriver] = useState(null); // Selected driver recommendation
@@ -276,21 +279,28 @@ const SearchRideScreen = () => {
                 longitudeDelta: Math.max(lngDelta, 0.01),
             });
 
-            // Search for matching rides
-            const response = await ridesAPI.searchRides(searchParams);
+            // Search for matching rides AND driver requests
+            const [ridesResponse, driverRequestsResponse] = await Promise.all([
+                ridesAPI.searchRides(searchParams).catch(err => {
+                    console.error("Error searching rides:", err);
+                    return { data: { success: false, data: { matches: [] } } };
+                }),
+                driverRequestsAPI.searchDriverRequests(searchParams).catch(err => {
+                    console.error("Error searching driver requests:", err);
+                    return { data: { success: false, data: { matches: [] } } };
+                })
+            ]);
 
-            if (response.data.success) {
-                const matches = response.data.data.matches || [];
-                setResults(matches);
-                setShowMap(true); // Show map with results
-                
-                if (matches.length === 0) {
-                    Alert.alert("No Results", "No matching rides found. Try adjusting your search criteria.");
-                }
-            } else {
-                Alert.alert("Error", response.data.message || "Failed to search rides");
-                setResults([]);
-            }
+            const matches = ridesResponse.data.success ? (ridesResponse.data.data.matches || []) : [];
+            const driverRequestMatches = driverRequestsResponse.data.success ? (driverRequestsResponse.data.data.matches || []) : [];
+            
+            console.log('Search results:', matches.length, 'Driver requests:', driverRequestMatches.length);
+            
+            setResults(matches);
+            setDriverRequests(driverRequestMatches);
+            setShowMap(true); // Show map with results
+            
+            // Don't show alert - let the UI handle it
         } catch (error) {
             console.error("Search rides error:", error);
             // Get detailed error message (as per Stack Overflow solution)
@@ -664,6 +674,77 @@ const SearchRideScreen = () => {
                     </Card>
                 )}
 
+                {/* Driver Requests - Drivers Looking for Riders */}
+                {showMap && driverRequests.length > 0 && (
+                    <View style={styles.resultsContainer}>
+                        <Text style={styles.resultsTitle}>Drivers Looking for Riders ({driverRequests.length})</Text>
+                        <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.resultsScroll}
+                            contentContainerStyle={styles.resultsScrollContent}
+                        >
+                            {driverRequests.map((request) => (
+                                <Card 
+                                    key={`driver-request-${request.id}`} 
+                                    style={styles.resultCard}
+                                >
+                                    <View style={styles.resultHeader}>
+                                        <Text style={styles.driverName}>{request.driver_name || "Driver"}</Text>
+                                        <Text style={styles.rating}>⭐ {request.driver_rating || "0.0"}</Text>
+                                    </View>
+                                    
+                                    {request.matchScore && (
+                                        <View style={styles.matchScoreContainer}>
+                                            <Text style={styles.matchScoreLabel}>Match Score:</Text>
+                                            <Text style={styles.matchScore}>{request.matchScore}/100</Text>
+                                        </View>
+                                    )}
+                                    
+                                    <Text style={styles.routeText}>
+                                        📍 {request.pickup_address || 'N/A'}
+                                    </Text>
+                                    <Text style={styles.routeText}>
+                                        🎯 {request.dropoff_address || 'N/A'}
+                                    </Text>
+                                    <Text style={styles.infoText}>
+                                        ⏰ {request.schedule_time || 'N/A'} • {Array.isArray(request.schedule_days) ? request.schedule_days.join(', ') : request.schedule_days}
+                                    </Text>
+                                    <Text style={styles.infoText}>
+                                        💰 ${parseFloat(request.price || 0).toFixed(2)} • 🪑 {request.available_seats || 1} seat{request.available_seats > 1 ? 's' : ''}
+                                    </Text>
+                                    
+                                    <Button
+                                        title="Respond to Request"
+                                        onPress={async () => {
+                                            try {
+                                                const response = await driverRequestsAPI.respondToDriverRequest(request.id, {
+                                                    pickup_latitude: pickupCoordinates?.latitude,
+                                                    pickup_longitude: pickupCoordinates?.longitude,
+                                                    pickup_address: pickupLocation,
+                                                    dropoff_latitude: dropoffCoordinates?.latitude,
+                                                    dropoff_longitude: dropoffCoordinates?.longitude,
+                                                    dropoff_address: dropoffLocation,
+                                                });
+                                                if (response.data.success) {
+                                                    Alert.alert("Success", "Response sent! The driver will be notified.");
+                                                } else {
+                                                    Alert.alert("Error", response.data.message || "Failed to respond");
+                                                }
+                                            } catch (error) {
+                                                console.error("Respond to driver request error:", error);
+                                                const errorMessage = error.response?.data?.message || error.message || "Failed to respond";
+                                                Alert.alert("Error", errorMessage);
+                                            }
+                                        }}
+                                        style={styles.requestButton}
+                                    />
+                                </Card>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
+
                 {/* Results - Show below map */}
                 {showMap && results.length > 0 && (
                     <View style={styles.resultsContainer}>
@@ -768,6 +849,98 @@ const SearchRideScreen = () => {
                             ))}
                         </ScrollView>
                     </View>
+                )}
+
+                {/* No Results - Show option to post driver request */}
+                {showMap && results.length === 0 && driverRequests.length === 0 && (
+                    <Card style={styles.noResultsCard}>
+                        <Text style={styles.noResultsTitle}>No Matching Rides Found</Text>
+                        <Text style={styles.noResultsText}>
+                            We couldn't find any matching rides for your route.
+                        </Text>
+                        {(currentRole === 'driver' || currentRole === 'both') ? (
+                            <>
+                                <Text style={styles.noResultsText}>
+                                    {"\n"}As a driver, you can:
+                                </Text>
+                                <Button
+                                    title="Add an Offer"
+                                    onPress={() => {
+                                        console.log('Add an Offer pressed');
+                                        navigation.navigate("PostRide", {
+                                            pickupLocation,
+                                            dropoffLocation,
+                                            pickupCoordinates,
+                                            dropoffCoordinates,
+                                            time,
+                                            days,
+                                        });
+                                    }}
+                                    style={styles.postOfferButton}
+                                />
+                                <Button
+                                    title="Post Looking for Riders Request"
+                                    onPress={() => {
+                                        console.log('Post Looking for Riders Request pressed');
+                                        navigation.navigate("PostDriverRequest", {
+                                            pickupLocation,
+                                            dropoffLocation,
+                                            pickupCoordinates,
+                                            dropoffCoordinates,
+                                            time,
+                                            days,
+                                        });
+                                    }}
+                                    style={styles.postRequestButton}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <Text style={styles.noResultsText}>
+                                    {"\n"}You can:
+                                </Text>
+                                <Button
+                                    title="Save Search for Future Matches"
+                                    onPress={async () => {
+                                        try {
+                                            const response = await riderSearchesAPI.saveSearch({
+                                                pickup_latitude: pickupCoordinates.latitude,
+                                                pickup_longitude: pickupCoordinates.longitude,
+                                                pickup_address: pickupLocation,
+                                                dropoff_latitude: dropoffCoordinates.latitude,
+                                                dropoff_longitude: dropoffCoordinates.longitude,
+                                                dropoff_address: dropoffLocation,
+                                                schedule_days: days,
+                                                schedule_time: time,
+                                            });
+                                            if (response.data.success) {
+                                                Alert.alert("Success", "Search saved! We'll notify you when a matching ride becomes available.");
+                                            } else {
+                                                Alert.alert("Error", response.data.message || "Failed to save search");
+                                            }
+                                        } catch (error) {
+                                            console.error("Save search error:", error);
+                                            let errorMessage = "Failed to save search";
+                                            if (error.response?.data) {
+                                                if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+                                                    errorMessage = error.response.data.errors.map(e => e.msg || e.message).join('\n');
+                                                } else {
+                                                    errorMessage = error.response.data.message || errorMessage;
+                                                }
+                                            } else {
+                                                errorMessage = error.message || errorMessage;
+                                            }
+                                            Alert.alert("Error", errorMessage);
+                                        }
+                                    }}
+                                    style={styles.saveSearchButton}
+                                />
+                                <Text style={styles.noResultsText}>
+                                    {"\n"}Or switch to driver mode to post a ride offer!
+                                </Text>
+                            </>
+                        )}
+                    </Card>
                 )}
             </ScrollView>
         </KeyboardAvoidingView>
@@ -1000,6 +1173,40 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 3,
         elevation: 3,
+    },
+    noResultsCard: {
+        margin: 16,
+        padding: 20,
+        alignItems: "center",
+    },
+    noResultsTitle: {
+        fontSize: 20,
+        fontWeight: "bold",
+        color: Colors.textPrimary,
+        marginBottom: 12,
+        textAlign: "center",
+    },
+    noResultsText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        textAlign: "center",
+        lineHeight: 20,
+        marginBottom: 16,
+    },
+    postOfferButton: {
+        marginTop: 16,
+        marginBottom: 8,
+        backgroundColor: Colors.primary,
+    },
+    postRequestButton: {
+        marginTop: 8,
+        marginBottom: 16,
+        backgroundColor: Colors.secondary,
+    },
+    saveSearchButton: {
+        marginTop: 16,
+        marginBottom: 8,
+        backgroundColor: Colors.primary,
     },
 });
 

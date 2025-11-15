@@ -58,6 +58,12 @@ const PostRideScreen = () => {
         if (route.params?.dropoffCoordinates) {
             setDropoffCoordinates(route.params.dropoffCoordinates);
         }
+        if (route.params?.time) {
+            setTime(route.params.time);
+        }
+        if (route.params?.days && Array.isArray(route.params.days)) {
+            setDays(route.params.days);
+        }
     }, []);
 
     // Also listen for params changes (not just on focus)

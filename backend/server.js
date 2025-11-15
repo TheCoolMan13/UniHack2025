@@ -9,6 +9,8 @@ const authRoutes = require('./routes/auth');
 const ridesRoutes = require('./routes/rides');
 const matchingRoutes = require('./routes/matching');
 const routesRoutes = require('./routes/routes');
+const driverRequestsRoutes = require('./routes/driverRequests');
+const riderSearchesRoutes = require('./routes/riderSearches');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +46,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/rides', ridesRoutes);
 app.use('/api/matching', matchingRoutes);
 app.use('/api/routes', routesRoutes);
+app.use('/api/driver-requests', driverRequestsRoutes);
+app.use('/api/rider-searches', riderSearchesRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

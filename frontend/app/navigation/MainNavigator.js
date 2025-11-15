@@ -11,9 +11,12 @@ import MapScreen from "../screens/map/MapScreen";
 import MyRidesScreen from "../screens/ride/MyRidesScreen";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import PostRideScreen from "../screens/ride/PostRideScreen";
+import PostDriverRequestScreen from "../screens/ride/PostDriverRequestScreen";
 import SearchRideScreen from "../screens/ride/SearchRideScreen";
 import DeliverPackageScreen from "../screens/ride/DeliverPackageScreen";
 import LocationSelectionScreen from "../screens/map/LocationSelectionScreen";
+import SavedSearchesScreen from "../screens/ride/SavedSearchesScreen";
+import NewMatchesScreen from "../screens/ride/NewMatchesScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -40,6 +43,14 @@ const HomeStack = () => {
                 }}
             />
             <Stack.Screen
+                name="PostDriverRequest"
+                component={PostDriverRequestScreen}
+                options={{
+                    presentation: "modal",
+                    headerShown: false,
+                }}
+            />
+            <Stack.Screen
                 name="SearchRide"
                 component={SearchRideScreen}
                 options={{
@@ -60,6 +71,22 @@ const HomeStack = () => {
                 component={LocationSelectionScreen}
                 options={{
                     presentation: "modal",
+                    headerShown: false,
+                }}
+            />
+            <Stack.Screen
+                name="SavedSearches"
+                component={SavedSearchesScreen}
+                options={{
+                    presentation: "card",
+                    headerShown: false,
+                }}
+            />
+            <Stack.Screen
+                name="NewMatches"
+                component={NewMatchesScreen}
+                options={{
+                    presentation: "card",
                     headerShown: false,
                 }}
             />

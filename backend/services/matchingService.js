@@ -146,8 +146,8 @@ const checkRouteOrder = async (pickupPoint, dropoffPoint, routeStart, routeEnd) 
     const isValidOrder = pickupIndex < dropoffIndex;
     
     // Calculate distances using routeService for accuracy
-    // Use VERY strict threshold for city-scale matching (100 meters)
-    const ON_ROUTE_THRESHOLD = 0.1; // 100 meters - VERY strict for city distances
+    // Use slightly strict threshold for city-scale matching (300 meters)
+    const ON_ROUTE_THRESHOLD = 0.3; // 300 meters - slightly strict for city distances
     const pickupCheck = await routeService.isPointOnRoute(
       pickupPoint,
       routeStart,
@@ -242,9 +242,12 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
       driverRoute.dropoffLocation.longitude
     );
 
-    // If both points are more than 10km from driver route endpoints, likely not a match
-    return pickupDistance < 10 || dropoffDistance < 10;
+    // Balanced: if either point is within 12km of driver route, consider it
+    // This allows for routes where passenger might be picked up along the way
+    return pickupDistance < 12 || dropoffDistance < 12;
   });
+  
+  console.log(`Quick filter: ${driverRoutes.length} routes -> ${quickFiltered.length} potential matches`);
 
   // Second pass: Use real route calculation for accurate matching
   for (const driverRoute of quickFiltered) {
@@ -314,8 +317,8 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         }
       } else {
         // Fallback to simple calculation if real routes disabled
-        // Use VERY strict threshold for city-scale matching (100 meters)
-        const ON_ROUTE_THRESHOLD = 0.1; // 100 meters - VERY strict for city distances
+        // Use slightly strict threshold for city-scale matching (300 meters)
+        const ON_ROUTE_THRESHOLD = 0.3; // 300 meters - slightly strict for city distances
         pickupOnRoute = isPointOnRoute(
           passengerRoute.pickupLocation,
           driverRoute.pickupLocation,
@@ -367,11 +370,11 @@ const findMatchingRides = async (passengerRoute, driverRoutes) => {
         driverRoute.schedule.days
       );
 
-      // Calculate match score with VERY strict city-scale logic
-      // Thresholds for city distances (in km) - MUCH stricter
-      const ON_ROUTE_THRESHOLD = 0.1; // 100 meters - must be VERY close to route
-      const NEAR_ROUTE_THRESHOLD = 0.5; // 500 meters - maximum acceptable distance
-      const CLOSE_TO_ROUTE_THRESHOLD = 1.0; // 1km - absolute maximum, with heavy penalty
+      // Calculate match score with slightly strict city-scale logic
+      // Thresholds for city distances (in km) - balanced for quality matches
+      const ON_ROUTE_THRESHOLD = 0.3; // 300 meters - on route (slightly strict)
+      const NEAR_ROUTE_THRESHOLD = 0.8; // 800 meters - near route, acceptable
+      const CLOSE_TO_ROUTE_THRESHOLD = 1.5; // 1.5km - close to route, with penalty
       
       // Only consider "on route" if actually within VERY strict threshold
       const strictPickupOnRoute = pickupOnRoute && pickupDistance <= ON_ROUTE_THRESHOLD;

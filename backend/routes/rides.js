@@ -132,7 +132,21 @@ router.post(
   '/:id/accept',
   authenticate,
   authorize('driver', 'both'),
-  [body('request_id').isInt()],
+  [
+    body('request_id')
+      .notEmpty().withMessage('Request ID is required')
+      .customSanitizer((value) => {
+        // Convert to string first, then parse to handle both string and number
+        return String(value);
+      })
+      .custom((value) => {
+        const num = parseInt(value, 10);
+        if (isNaN(num) || num < 1) {
+          throw new Error('Request ID must be a valid positive integer');
+        }
+        return true;
+      })
+  ],
   ridesController.acceptRequest
 );
 
@@ -145,8 +159,48 @@ router.post(
   '/:id/reject',
   authenticate,
   authorize('driver', 'both'),
-  [body('request_id').isInt()],
+  [
+    body('request_id')
+      .notEmpty().withMessage('Request ID is required')
+      .customSanitizer((value) => {
+        // Convert to string first, then parse to handle both string and number
+        return String(value);
+      })
+      .custom((value) => {
+        const num = parseInt(value, 10);
+        if (isNaN(num) || num < 1) {
+          throw new Error('Request ID must be a valid positive integer');
+        }
+        return true;
+      })
+  ],
   ridesController.rejectRequest
+);
+
+/**
+ * @route   POST /api/rides/:id/cancel
+ * @desc    Cancel an accepted ride request (Driver)
+ * @access  Private (Driver)
+ */
+router.post(
+  '/:id/cancel',
+  authenticate,
+  authorize('driver', 'both'),
+  [
+    body('request_id')
+      .notEmpty().withMessage('Request ID is required')
+      .customSanitizer((value) => {
+        return String(value);
+      })
+      .custom((value) => {
+        const num = parseInt(value, 10);
+        if (isNaN(num) || num < 1) {
+          throw new Error('Request ID must be a valid positive integer');
+        }
+        return true;
+      })
+  ],
+  ridesController.cancelRequest
 );
 
 module.exports = router;

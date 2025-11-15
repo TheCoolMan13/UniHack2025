@@ -160,6 +160,39 @@ const getMyRides = async (req, res) => {
          ORDER BY r.created_at DESC`,
         [userId]
       );
+      
+      // For each ride, get pending and accepted requests with passenger details
+      for (let ride of rides) {
+        // Get pending requests
+        const [pendingRequests] = await db.execute(
+          `SELECT rr.*, 
+           u.name as passenger_name, 
+           u.rating as passenger_rating,
+           u.phone as passenger_phone,
+           u.email as passenger_email
+           FROM ride_requests rr
+           JOIN users u ON rr.passenger_id = u.id
+           WHERE rr.ride_id = ? AND rr.status = 'pending'
+           ORDER BY rr.created_at DESC`,
+          [ride.id]
+        );
+        ride.pending_requests = pendingRequests;
+        
+        // Get accepted requests
+        const [acceptedRequests] = await db.execute(
+          `SELECT rr.*, 
+           u.name as passenger_name, 
+           u.rating as passenger_rating,
+           u.phone as passenger_phone,
+           u.email as passenger_email
+           FROM ride_requests rr
+           JOIN users u ON rr.passenger_id = u.id
+           WHERE rr.ride_id = ? AND rr.status = 'accepted'
+           ORDER BY rr.created_at DESC`,
+          [ride.id]
+        );
+        ride.accepted_requests = acceptedRequests;
+      }
     } else {
       // Get ride requests made by user as passenger
       [rides] = await db.execute(
@@ -227,19 +260,43 @@ const getRideDetails = async (req, res) => {
     }
 
     const ride = rides[0];
-    ride.schedule_days = JSON.parse(ride.schedule_days);
+    // MySQL JSON columns are already parsed, but sometimes they're strings
+    if (ride.schedule_days) {
+      if (typeof ride.schedule_days === 'string') {
+        try {
+          ride.schedule_days = JSON.parse(ride.schedule_days);
+        } catch (e) {
+          ride.schedule_days = [];
+        }
+      }
+    } else {
+      ride.schedule_days = [];
+    }
 
     // Get ride requests if user is the driver
     if (ride.driver_id === req.user.id) {
       const [requests] = await db.execute(
-        `SELECT rr.*, u.name as passenger_name, u.rating as passenger_rating
+        `SELECT rr.*, 
+         u.name as passenger_name, 
+         u.rating as passenger_rating,
+         u.phone as passenger_phone,
+         u.email as passenger_email
          FROM ride_requests rr
          JOIN users u ON rr.passenger_id = u.id
          WHERE rr.ride_id = ?
-         ORDER BY rr.created_at DESC`,
+         ORDER BY 
+           CASE rr.status
+             WHEN 'pending' THEN 1
+             WHEN 'accepted' THEN 2
+             WHEN 'rejected' THEN 3
+             WHEN 'cancelled' THEN 4
+           END,
+           rr.created_at DESC`,
         [id]
       );
       ride.requests = requests;
+      // Separate pending requests for easier access
+      ride.pending_requests = requests.filter(r => r.status === 'pending');
     }
 
     res.json({
@@ -621,18 +678,40 @@ const searchRides = async (req, res, next) => {
       matches = enhancedMatches;
       
       // Filter to only return the best matches
-      // 1. Only matches with score >= 50 (good quality threshold)
-      // 2. Limit to top 10 best matches
-        const MIN_MATCH_SCORE = 55; // Minimum quality score - VERY strict
-        const MAX_RESULTS = 10; // Maximum number of results
+      // 1. Only matches with score >= 40 (slightly strict but reasonable)
+      // 2. Show at least 3 best matches if available, up to 10 max
+      const MIN_MATCH_SCORE = 40; // Minimum quality score - slightly strict
+      const MIN_RESULTS = 3; // Always show at least 3 matches if available
+      const MAX_RESULTS = 10; // Maximum number of results
       
-      const bestMatches = matches
-        .filter(match => match.matchScore >= MIN_MATCH_SCORE)
-        .slice(0, MAX_RESULTS);
+      // Log all matches before filtering for debugging
+      console.log(`Found ${matches.length} total matches before filtering:`);
+      matches.forEach((match, idx) => {
+        console.log(`  Match ${idx + 1}: Score=${match.matchScore}, Reasons=[${match.reasons?.join(', ') || 'N/A'}]`);
+      });
+      
+      // Sort by score (highest first) before filtering
+      matches.sort((a, b) => b.matchScore - a.matchScore);
+      
+      // First, get matches that meet the minimum score
+      const qualifiedMatches = matches.filter(match => match.matchScore >= MIN_MATCH_SCORE);
+      
+      // If we have fewer than MIN_RESULTS qualified matches, also include lower-scored matches
+      // to ensure we show at least MIN_RESULTS (if available)
+      let bestMatches;
+      if (qualifiedMatches.length >= MIN_RESULTS) {
+        // We have enough qualified matches, just take top MAX_RESULTS
+        bestMatches = qualifiedMatches.slice(0, MAX_RESULTS);
+      } else {
+        // Not enough qualified matches, include lower-scored ones to reach MIN_RESULTS
+        // But still prioritize higher scores
+        bestMatches = matches.slice(0, Math.max(MIN_RESULTS, qualifiedMatches.length)).slice(0, MAX_RESULTS);
+        console.log(`  Note: Including ${bestMatches.length - qualifiedMatches.length} lower-scored matches to reach minimum of ${MIN_RESULTS}`);
+      }
       
       matches = bestMatches;
       
-      console.log(`Filtered to ${matches.length} best matches (score >= ${MIN_MATCH_SCORE}, max ${MAX_RESULTS})`);
+      console.log(`Filtered to ${matches.length} best matches (min score: ${MIN_MATCH_SCORE}, showing at least ${MIN_RESULTS}, max ${MAX_RESULTS})`);
     } catch (matchingError) {
       console.error('Error in findMatchingRides:', matchingError);
       console.error('Matching error message:', matchingError?.message);
@@ -782,6 +861,7 @@ const acceptRequest = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('Accept request validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
@@ -792,6 +872,15 @@ const acceptRequest = async (req, res) => {
     const { id } = req.params;
     const { request_id } = req.body;
     const userId = req.user.id;
+    
+    // Ensure request_id is an integer
+    const requestIdInt = parseInt(request_id, 10);
+    if (isNaN(requestIdInt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Request ID must be a valid integer'
+      });
+    }
 
     // Check if ride exists and belongs to user
     const [rides] = await db.execute(
@@ -831,7 +920,7 @@ const acceptRequest = async (req, res) => {
     // Update request status
     await db.execute(
       'UPDATE ride_requests SET status = "accepted" WHERE id = ?',
-      [request_id]
+      [requestIdInt]
     );
 
     // Decrease available seats
@@ -840,9 +929,23 @@ const acceptRequest = async (req, res) => {
       [id]
     );
 
+    // Get updated request with passenger info for response
+    const [updatedRequests] = await db.execute(
+      `SELECT rr.*, 
+       u.name as passenger_name, 
+       u.rating as passenger_rating,
+       u.phone as passenger_phone,
+       u.email as passenger_email
+       FROM ride_requests rr
+       JOIN users u ON rr.passenger_id = u.id
+       WHERE rr.id = ?`,
+      [requestIdInt]
+    );
+
     res.json({
       success: true,
-      message: 'Ride request accepted successfully'
+      message: 'Ride request accepted successfully',
+      data: { request: updatedRequests[0] }
     });
   } catch (error) {
     console.error('Accept request error:', error);
@@ -862,6 +965,7 @@ const rejectRequest = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('Reject request validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
@@ -872,6 +976,15 @@ const rejectRequest = async (req, res) => {
     const { id } = req.params;
     const { request_id } = req.body;
     const userId = req.user.id;
+    
+    // Ensure request_id is an integer
+    const requestIdInt = parseInt(request_id, 10);
+    if (isNaN(requestIdInt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Request ID must be a valid integer'
+      });
+    }
 
     // Check if ride exists and belongs to user
     const [rides] = await db.execute(
@@ -889,7 +1002,7 @@ const rejectRequest = async (req, res) => {
     // Check if request exists and belongs to this ride
     const [requests] = await db.execute(
       'SELECT * FROM ride_requests WHERE id = ? AND ride_id = ?',
-      [request_id, id]
+      [requestIdInt, id]
     );
 
     if (requests.length === 0) {
@@ -902,18 +1015,136 @@ const rejectRequest = async (req, res) => {
     // Update request status
     await db.execute(
       'UPDATE ride_requests SET status = "rejected" WHERE id = ?',
-      [request_id]
+      [requestIdInt]
+    );
+
+    // Get updated request with passenger info for response
+    const [updatedRequests] = await db.execute(
+      `SELECT rr.*, 
+       u.name as passenger_name, 
+       u.rating as passenger_rating,
+       u.phone as passenger_phone,
+       u.email as passenger_email
+       FROM ride_requests rr
+       JOIN users u ON rr.passenger_id = u.id
+       WHERE rr.id = ?`,
+      [requestIdInt]
     );
 
     res.json({
       success: true,
-      message: 'Ride request rejected successfully'
+      message: 'Ride request rejected successfully',
+      data: { request: updatedRequests[0] }
     });
   } catch (error) {
     console.error('Reject request error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error rejecting request'
+    });
+  }
+};
+
+/**
+ * @desc    Cancel an accepted ride request
+ * @route   POST /api/rides/:id/cancel
+ * @access  Private (Driver)
+ */
+const cancelRequest = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.error('Cancel request validation errors:', errors.array());
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { id } = req.params;
+    const { request_id } = req.body;
+    const userId = req.user.id;
+    
+    // Ensure request_id is an integer
+    const requestIdInt = parseInt(request_id, 10);
+    if (isNaN(requestIdInt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Request ID must be a valid integer'
+      });
+    }
+
+    // Check if ride exists and belongs to user
+    const [rides] = await db.execute(
+      'SELECT * FROM rides WHERE id = ? AND driver_id = ?',
+      [id, userId]
+    );
+
+    if (rides.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ride not found or you do not have permission'
+      });
+    }
+
+    // Check if request exists and belongs to this ride
+    const [requests] = await db.execute(
+      'SELECT * FROM ride_requests WHERE id = ? AND ride_id = ?',
+      [requestIdInt, id]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ride request not found'
+      });
+    }
+
+    const request = requests[0];
+
+    if (request.status !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Can only cancel accepted ride requests'
+      });
+    }
+
+    // Update request status to cancelled
+    await db.execute(
+      'UPDATE ride_requests SET status = "cancelled" WHERE id = ?',
+      [requestIdInt]
+    );
+
+    // Increase available seats back
+    await db.execute(
+      'UPDATE rides SET available_seats = available_seats + 1 WHERE id = ?',
+      [id]
+    );
+
+    // Get updated request with passenger info for response
+    const [updatedRequests] = await db.execute(
+      `SELECT rr.*, 
+       u.name as passenger_name, 
+       u.rating as passenger_rating,
+       u.phone as passenger_phone,
+       u.email as passenger_email
+       FROM ride_requests rr
+       JOIN users u ON rr.passenger_id = u.id
+       WHERE rr.id = ?`,
+      [requestIdInt]
+    );
+
+    res.json({
+      success: true,
+      message: 'Ride request cancelled successfully',
+      data: { request: updatedRequests[0] }
+    });
+  } catch (error) {
+    console.error('Cancel request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error cancelling request'
     });
   }
 };
@@ -928,6 +1159,7 @@ module.exports = {
   searchRides,
   requestRide,
   acceptRequest,
-  rejectRequest
+  rejectRequest,
+  cancelRequest
 };
 

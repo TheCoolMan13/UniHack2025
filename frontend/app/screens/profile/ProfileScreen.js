@@ -139,12 +139,13 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     content: {
+        paddingHorizontal: 16,
         paddingBottom: 40,
     },
     profileCard: {
         alignItems: "center",
-        margin: 16,
         marginTop: 0,
+        marginBottom: 16,
     },
     avatarContainer: {
         marginBottom: 16,
@@ -195,8 +196,8 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
     infoCard: {
-        margin: 16,
         marginTop: 0,
+        marginBottom: 16,
     },
     infoRow: {
         flexDirection: "row",
@@ -217,8 +218,8 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.border,
     },
     settingsCard: {
-        margin: 16,
         marginTop: 0,
+        marginBottom: 16,
     },
     sectionTitle: {
         fontSize: 18,
@@ -241,8 +242,8 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
     },
     logoutButton: {
-        margin: 16,
         marginTop: 0,
+        marginBottom: 16,
         borderColor: Colors.error,
     },
 });

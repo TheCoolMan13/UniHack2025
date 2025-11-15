@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions, Platform } from "react-native";
+import { useSafeAreaInsets, useSafeAreaFrame } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { useAuth } from "../../../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
@@ -20,6 +21,9 @@ import { MAP_CONFIG } from "../../../constants/config";
 const MyRidesScreen = () => {
     const { currentRole, user } = useAuth();
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
+    const frame = useSafeAreaFrame();
+    const windowHeight = Dimensions.get('window').height;
     const [activeTab, setActiveTab] = useState("requested"); // 'requested', 'offered', or 'saved'
     const [requestedRides, setRequestedRides] = useState([]); // Rides user requested as passenger
     const [offeredRides, setOfferedRides] = useState([]); // Rides user posted as driver
@@ -336,6 +340,7 @@ const MyRidesScreen = () => {
 
     const handleShowMap = async (ride, request) => {
         try {
+            console.log('handleShowMap called with:', { ride, request });
             setSelectedRequest(request);
             setSelectedRide(ride);
             setShowMapModal(true);
@@ -345,6 +350,9 @@ const MyRidesScreen = () => {
                 Alert.alert("Error", "Missing ride or request data");
                 return;
             }
+            
+            console.log('Ride originalRide:', ride.originalRide);
+            console.log('Request object:', request);
             
             // Fetch driver route - ensure coordinates are numbers
             const driverOrigin = {
@@ -356,22 +364,29 @@ const MyRidesScreen = () => {
                 longitude: parseFloat(ride.originalRide.dropoff_longitude)
             };
             
-            // Fetch rider route - ensure coordinates are numbers
+            // Fetch rider route - try multiple possible field names
             const riderOrigin = {
-                latitude: parseFloat(request.pickup_latitude),
-                longitude: parseFloat(request.pickup_longitude)
+                latitude: parseFloat(request.pickup_latitude || request.origin_latitude || request.pickupLat || 0),
+                longitude: parseFloat(request.pickup_longitude || request.origin_longitude || request.pickupLng || 0)
             };
             const riderDest = {
-                latitude: parseFloat(request.dropoff_latitude),
-                longitude: parseFloat(request.dropoff_longitude)
+                latitude: parseFloat(request.dropoff_latitude || request.dest_latitude || request.dropoffLat || 0),
+                longitude: parseFloat(request.dropoff_longitude || request.dest_longitude || request.dropoffLng || 0)
             };
+            
+            console.log('Driver coordinates:', { origin: driverOrigin, dest: driverDest });
+            console.log('Rider coordinates:', { origin: riderOrigin, dest: riderDest });
             
             // Validate coordinates
             if (isNaN(driverOrigin.latitude) || isNaN(driverOrigin.longitude) ||
                 isNaN(driverDest.latitude) || isNaN(driverDest.longitude) ||
                 isNaN(riderOrigin.latitude) || isNaN(riderOrigin.longitude) ||
                 isNaN(riderDest.latitude) || isNaN(riderDest.longitude)) {
-                Alert.alert("Error", "Invalid coordinates");
+                console.error('Invalid coordinates detected:', {
+                    driver: { origin: driverOrigin, dest: driverDest },
+                    rider: { origin: riderOrigin, dest: riderDest }
+                });
+                Alert.alert("Error", "Invalid coordinates. Check console for details.");
                 return;
             }
             
@@ -830,13 +845,20 @@ const MyRidesScreen = () => {
             </ScrollView>
 
             {/* Map Modal for viewing routes */}
-            <Modal
-                visible={showMapModal}
-                animationType="slide"
-                transparent={false}
-                onRequestClose={() => setShowMapModal(false)}
-            >
-                <View style={styles.modalContainer}>
+            {showMapModal && (
+                <View style={styles.modalOverlay}>
+                    <TouchableOpacity 
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={() => {
+                            setShowMapModal(false);
+                            setSelectedRequest(null);
+                            setSelectedRide(null);
+                            setDriverRoute(null);
+                            setRiderRoute(null);
+                        }}
+                    />
+                    <View style={[styles.modalContainer, { marginBottom: -35 + Math.max(insets.bottom, 0) }]}>
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>Route Map</Text>
                         <TouchableOpacity
@@ -853,107 +875,317 @@ const MyRidesScreen = () => {
                         </TouchableOpacity>
                     </View>
                     
-                    {mapRegion && (
+                    {mapRegion ? (
                         <MapView
                             ref={mapRef}
                             style={styles.modalMap}
                             region={mapRegion}
                             onRegionChangeComplete={setMapRegion}
+                            initialRegion={mapRegion}
                         >
                             {/* Driver's route markers */}
-                            {selectedRide && selectedRide.originalRide && (
-                                <>
-                                    <Marker
-                                        coordinate={{
-                                            latitude: parseFloat(selectedRide.originalRide.pickup_latitude) || 0,
-                                            longitude: parseFloat(selectedRide.originalRide.pickup_longitude) || 0
-                                        }}
-                                        title="Your Start"
-                                        pinColor={Colors.secondary}
-                                    />
-                                    <Marker
-                                        coordinate={{
-                                            latitude: parseFloat(selectedRide.originalRide.dropoff_latitude) || 0,
-                                            longitude: parseFloat(selectedRide.originalRide.dropoff_longitude) || 0
-                                        }}
-                                        title="Your End"
-                                        pinColor={Colors.secondary}
-                                    />
-                                    {driverRoute && driverRoute.polyline ? (
-                                        <Polyline
-                                            key="driver-route-polyline"
-                                            coordinates={decodePolyline(driverRoute.polyline)}
-                                            strokeColor={Colors.secondary}
-                                            strokeWidth={4}
+                            {selectedRide && selectedRide.originalRide && (() => {
+                                const driverPickupLat = parseFloat(selectedRide.originalRide.pickup_latitude);
+                                const driverPickupLng = parseFloat(selectedRide.originalRide.pickup_longitude);
+                                const driverDropoffLat = parseFloat(selectedRide.originalRide.dropoff_latitude);
+                                const driverDropoffLng = parseFloat(selectedRide.originalRide.dropoff_longitude);
+                                
+                                console.log('Driver coordinates:', {
+                                    pickup: { lat: driverPickupLat, lng: driverPickupLng },
+                                    dropoff: { lat: driverDropoffLat, lng: driverDropoffLng },
+                                    originalRide: selectedRide.originalRide
+                                });
+                                
+                                const markers = [];
+                                
+                                // Driver pickup marker
+                                if (!isNaN(driverPickupLat) && !isNaN(driverPickupLng) && 
+                                    driverPickupLat !== 0 && driverPickupLng !== 0) {
+                                    markers.push(
+                                        <Marker
+                                            key="driver-pickup"
+                                            coordinate={{
+                                                latitude: driverPickupLat,
+                                                longitude: driverPickupLng
+                                            }}
+                                            title="Your Start"
+                                            pinColor={Colors.secondary}
                                         />
-                                    ) : (
-                                        <Polyline
-                                            key="driver-route-fallback"
-                                            coordinates={[
-                                                {
-                                                    latitude: parseFloat(selectedRide.originalRide.pickup_latitude) || 0,
-                                                    longitude: parseFloat(selectedRide.originalRide.pickup_longitude) || 0
-                                                },
-                                                {
-                                                    latitude: parseFloat(selectedRide.originalRide.dropoff_latitude) || 0,
-                                                    longitude: parseFloat(selectedRide.originalRide.dropoff_longitude) || 0
+                                    );
+                                } else {
+                                    console.warn('Invalid driver pickup coordinates');
+                                }
+                                
+                                // Driver dropoff marker
+                                if (!isNaN(driverDropoffLat) && !isNaN(driverDropoffLng) && 
+                                    driverDropoffLat !== 0 && driverDropoffLng !== 0) {
+                                    markers.push(
+                                        <Marker
+                                            key="driver-dropoff"
+                                            coordinate={{
+                                                latitude: driverDropoffLat,
+                                                longitude: driverDropoffLng
+                                            }}
+                                            title="Your End"
+                                            pinColor={Colors.secondary}
+                                        />
+                                    );
+                                } else {
+                                    console.warn('Invalid driver dropoff coordinates');
+                                }
+                                
+                                if (markers.length === 0) {
+                                    return null;
+                                }
+                                
+                                return (
+                                    <>
+                                        {markers}
+                                        {driverRoute && driverRoute.polyline ? (() => {
+                                            try {
+                                                const coords = decodePolyline(driverRoute.polyline, true);
+                                                if (coords.length === 0) {
+                                                    return (
+                                                        <Polyline
+                                                            key="driver-route-fallback"
+                                                            coordinates={[
+                                                                {
+                                                                    latitude: driverPickupLat,
+                                                                    longitude: driverPickupLng
+                                                                },
+                                                                {
+                                                                    latitude: driverDropoffLat,
+                                                                    longitude: driverDropoffLng
+                                                                }
+                                                            ]}
+                                                            strokeColor={Colors.secondary}
+                                                            strokeWidth={4}
+                                                            lineDashPattern={[5, 5]}
+                                                        />
+                                                    );
                                                 }
-                                            ]}
-                                            strokeColor={Colors.secondary}
-                                            strokeWidth={3}
-                                            lineDashPattern={[5, 5]}
-                                        />
-                                    )}
-                                </>
-                            )}
+                                                return (
+                                                    <Polyline
+                                                        key="driver-route-polyline"
+                                                        coordinates={coords}
+                                                        strokeColor={Colors.secondary}
+                                                        strokeWidth={4}
+                                                    />
+                                                );
+                                            } catch (error) {
+                                                console.error('Error rendering driver route:', error);
+                                                return (
+                                                    <Polyline
+                                                        key="driver-route-fallback"
+                                                        coordinates={[
+                                                            {
+                                                                latitude: driverPickupLat,
+                                                                longitude: driverPickupLng
+                                                            },
+                                                            {
+                                                                latitude: driverDropoffLat,
+                                                                longitude: driverDropoffLng
+                                                            }
+                                                        ]}
+                                                        strokeColor={Colors.secondary}
+                                                        strokeWidth={4}
+                                                        lineDashPattern={[5, 5]}
+                                                    />
+                                                );
+                                            }
+                                        })() : (
+                                            <Polyline
+                                                key="driver-route-fallback"
+                                                coordinates={[
+                                                    {
+                                                        latitude: driverPickupLat,
+                                                        longitude: driverPickupLng
+                                                    },
+                                                    {
+                                                        latitude: driverDropoffLat,
+                                                        longitude: driverDropoffLng
+                                                    }
+                                                ]}
+                                                strokeColor={Colors.secondary}
+                                                strokeWidth={4}
+                                                lineDashPattern={[5, 5]}
+                                            />
+                                        )}
+                                    </>
+                                );
+                            })()}
                             
                             {/* Rider's route markers */}
-                            {selectedRequest && selectedRequest.pickup_latitude && selectedRequest.pickup_longitude && (
-                                <>
-                                    <Marker
-                                        coordinate={{
-                                            latitude: parseFloat(selectedRequest.pickup_latitude) || 0,
-                                            longitude: parseFloat(selectedRequest.pickup_longitude) || 0
-                                        }}
-                                        title={`${selectedRequest.passenger_name || 'Passenger'}'s Pickup`}
-                                        pinColor={Colors.primary}
-                                    />
-                                    <Marker
-                                        coordinate={{
-                                            latitude: parseFloat(selectedRequest.dropoff_latitude) || 0,
-                                            longitude: parseFloat(selectedRequest.dropoff_longitude) || 0
-                                        }}
-                                        title={`${selectedRequest.passenger_name || 'Passenger'}'s Dropoff`}
-                                        pinColor={Colors.error}
-                                    />
-                                    {riderRoute && riderRoute.polyline && (
-                                        <Polyline
-                                            coordinates={decodePolyline(riderRoute.polyline)}
-                                            strokeColor={Colors.primary}
-                                            strokeWidth={4}
+                            {selectedRequest && (() => {
+                                // Try multiple possible field names for coordinates
+                                const riderPickupLat = parseFloat(
+                                    selectedRequest.pickup_latitude || 
+                                    selectedRequest.origin_latitude || 
+                                    selectedRequest.pickupLat || 
+                                    selectedRequest.originLat || 
+                                    0
+                                );
+                                const riderPickupLng = parseFloat(
+                                    selectedRequest.pickup_longitude || 
+                                    selectedRequest.origin_longitude || 
+                                    selectedRequest.pickupLng || 
+                                    selectedRequest.originLng || 
+                                    0
+                                );
+                                const riderDropoffLat = parseFloat(
+                                    selectedRequest.dropoff_latitude || 
+                                    selectedRequest.dest_latitude || 
+                                    selectedRequest.dropoffLat || 
+                                    selectedRequest.destLat || 
+                                    0
+                                );
+                                const riderDropoffLng = parseFloat(
+                                    selectedRequest.dropoff_longitude || 
+                                    selectedRequest.dest_longitude || 
+                                    selectedRequest.dropoffLng || 
+                                    selectedRequest.destLng || 
+                                    0
+                                );
+                                
+                                console.log('Rider coordinates:', {
+                                    pickup: { lat: riderPickupLat, lng: riderPickupLng },
+                                    dropoff: { lat: riderDropoffLat, lng: riderDropoffLng },
+                                    requestData: selectedRequest
+                                });
+                                
+                                const markers = [];
+                                
+                                // Rider pickup marker
+                                if (!isNaN(riderPickupLat) && !isNaN(riderPickupLng) && 
+                                    riderPickupLat !== 0 && riderPickupLng !== 0) {
+                                    markers.push(
+                                        <Marker
+                                            key="rider-pickup"
+                                            coordinate={{
+                                                latitude: riderPickupLat,
+                                                longitude: riderPickupLng
+                                            }}
+                                            title={`${selectedRequest.passenger_name || 'Passenger'}'s Pickup`}
+                                            pinColor={Colors.primary}
                                         />
-                                    )}
-                                    {/* Fallback: Draw straight line if no polyline */}
-                                    {(!riderRoute || !riderRoute.polyline) && (
-                                        <Polyline
-                                            coordinates={[
-                                                {
-                                                    latitude: parseFloat(selectedRequest.pickup_latitude) || 0,
-                                                    longitude: parseFloat(selectedRequest.pickup_longitude) || 0
-                                                },
-                                                {
-                                                    latitude: parseFloat(selectedRequest.dropoff_latitude) || 0,
-                                                    longitude: parseFloat(selectedRequest.dropoff_longitude) || 0
+                                    );
+                                } else {
+                                    console.warn('Invalid rider pickup coordinates:', {
+                                        lat: riderPickupLat,
+                                        lng: riderPickupLng,
+                                        request: selectedRequest
+                                    });
+                                }
+                                
+                                // Rider dropoff marker
+                                if (!isNaN(riderDropoffLat) && !isNaN(riderDropoffLng) && 
+                                    riderDropoffLat !== 0 && riderDropoffLng !== 0) {
+                                    markers.push(
+                                        <Marker
+                                            key="rider-dropoff"
+                                            coordinate={{
+                                                latitude: riderDropoffLat,
+                                                longitude: riderDropoffLng
+                                            }}
+                                            title={`${selectedRequest.passenger_name || 'Passenger'}'s Dropoff`}
+                                            pinColor={Colors.error}
+                                        />
+                                    );
+                                } else {
+                                    console.warn('Invalid rider dropoff coordinates:', {
+                                        lat: riderDropoffLat,
+                                        lng: riderDropoffLng,
+                                        request: selectedRequest
+                                    });
+                                }
+                                
+                                if (markers.length === 0) {
+                                    console.warn('No valid rider markers to display');
+                                    return null;
+                                }
+                                
+                                return (
+                                    <>
+                                        {markers}
+                                        {riderRoute && riderRoute.polyline ? (() => {
+                                            try {
+                                                const coords = decodePolyline(riderRoute.polyline, true);
+                                                if (coords.length === 0) {
+                                                    return (
+                                                        <Polyline
+                                                            key="rider-route-fallback"
+                                                            coordinates={[
+                                                                {
+                                                                    latitude: riderPickupLat,
+                                                                    longitude: riderPickupLng
+                                                                },
+                                                                {
+                                                                    latitude: riderDropoffLat,
+                                                                    longitude: riderDropoffLng
+                                                                }
+                                                            ]}
+                                                            strokeColor={Colors.primary}
+                                                            strokeWidth={4}
+                                                            lineDashPattern={[5, 5]}
+                                                        />
+                                                    );
                                                 }
-                                            ]}
-                                            strokeColor={Colors.primary}
-                                            strokeWidth={3}
-                                            lineDashPattern={[5, 5]}
-                                        />
-                                    )}
-                                </>
-                            )}
+                                                return (
+                                                    <Polyline
+                                                        key="rider-route-polyline"
+                                                        coordinates={coords}
+                                                        strokeColor={Colors.primary}
+                                                        strokeWidth={4}
+                                                    />
+                                                );
+                                            } catch (error) {
+                                                console.error('Error rendering rider route:', error);
+                                                return (
+                                                    <Polyline
+                                                        key="rider-route-fallback"
+                                                        coordinates={[
+                                                            {
+                                                                latitude: riderPickupLat,
+                                                                longitude: riderPickupLng
+                                                            },
+                                                            {
+                                                                latitude: riderDropoffLat,
+                                                                longitude: riderDropoffLng
+                                                            }
+                                                        ]}
+                                                        strokeColor={Colors.primary}
+                                                        strokeWidth={4}
+                                                        lineDashPattern={[5, 5]}
+                                                    />
+                                                );
+                                            }
+                                        })() : (
+                                            <Polyline
+                                                key="rider-route-fallback"
+                                                coordinates={[
+                                                    {
+                                                        latitude: riderPickupLat,
+                                                        longitude: riderPickupLng
+                                                    },
+                                                    {
+                                                        latitude: riderDropoffLat,
+                                                        longitude: riderDropoffLng
+                                                    }
+                                                ]}
+                                                strokeColor={Colors.primary}
+                                                strokeWidth={4}
+                                                lineDashPattern={[5, 5]}
+                                            />
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </MapView>
+                    ) : (
+                        <View style={styles.mapLoadingContainer}>
+                            <ActivityIndicator size="large" color={Colors.primary} />
+                            <Text style={styles.mapLoadingText}>Loading map...</Text>
+                        </View>
                     )}
                     
                     <View style={styles.mapLegend}>
@@ -966,8 +1198,9 @@ const MyRidesScreen = () => {
                             <Text style={styles.legendText}>Rider's Route</Text>
                         </View>
                     </View>
+                    </View>
                 </View>
-            </Modal>
+            )}
         </View>
     );
 };
@@ -1241,9 +1474,24 @@ const styles = StyleSheet.create({
         borderLeftWidth: 3,
         borderLeftColor: Colors.secondary,
     },
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        zIndex: 1000,
+        justifyContent: 'flex-end',
+    },
     modalContainer: {
-        flex: 1,
         backgroundColor: Colors.background,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        width: '100%',
+        height: Dimensions.get('window').height * 0.75,
+        overflow: 'hidden',
+        flexDirection: 'column',
     },
     modalHeader: {
         flexDirection: "row",
@@ -1268,6 +1516,19 @@ const styles = StyleSheet.create({
     },
     modalMap: {
         flex: 1,
+        minHeight: 400,
+        width: '100%',
+    },
+    mapLoadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 400,
+    },
+    mapLoadingText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: Colors.textSecondary,
     },
     mapLegend: {
         flexDirection: "row",

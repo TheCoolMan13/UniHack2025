@@ -10,6 +10,9 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyCskit7K-AaJaoMryKbLhp0J1zRxq2V3Jc"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location to show nearby rides and help you find matching routes.",
         "NSLocationAlwaysUsageDescription": "This app needs access to your location to show nearby rides and help you find matching routes."

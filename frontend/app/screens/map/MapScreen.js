@@ -1,13 +1,14 @@
 import * as Location from "expo-location";
 import React, { useEffect, useState, useRef } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import { Alert, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Platform } from "react-native";
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import Card from "../../../components/common/Card";
 import Header from "../../../components/common/Header";
 import { Colors } from "../../../constants/colors";
-import { ridesAPI } from "../../../services/api";
+import { ridesAPI, routesAPI } from "../../../services/api";
 import { MAP_CONFIG } from "../../../constants/config";
 import { useAuth } from "../../../context/AuthContext";
+import { decodePolyline } from "../../../utils/polyline";
 
 /**
  * Map Screen
@@ -25,6 +26,8 @@ const MapScreen = () => {
     const [selectedRide, setSelectedRide] = useState(null);
     const markerPressRef = useRef(false);
     const [locationLoading, setLocationLoading] = useState(true);
+    const [rideRoutes, setRideRoutes] = useState({}); // Store routes: { 'rideType-rideId': { polyline: '...', coordinates: [...] } }
+    const [requestRoutes, setRequestRoutes] = useState({}); // Store request routes: { 'rideId-requestId': { polyline: '...', coordinates: [...] } }
 
     useEffect(() => {
         requestLocationPermission();
@@ -56,6 +59,9 @@ const MapScreen = () => {
                     const driverRides = (driverResponse.data.data.rides || []).map(ride => ({
                         ...ride,
                         rideType: 'offered', // User offered this ride as driver
+                        // Include accepted_requests and pending_requests from API response
+                        accepted_requests: ride.accepted_requests || [],
+                        pending_requests: ride.pending_requests || [],
                     }));
                     allRides.push(...driverRides);
                 }
@@ -78,12 +84,138 @@ const MapScreen = () => {
             }
             
             setRides(allRides);
+            
+            // Fetch routes for all rides
+            fetchRoutesForRides(allRides);
         } catch (error) {
             console.error("Fetch user rides error:", error);
             setRides([]);
         } finally {
             setLoading(false);
         }
+    };
+
+    /**
+     * Fetch actual routes for all rides using Google Maps Directions API
+     */
+    const fetchRoutesForRides = async (ridesList) => {
+        const routes = {};
+        const reqRoutes = {};
+        
+        // Fetch routes for each ride
+        const routePromises = ridesList.map(async (ride) => {
+            if (!ride.pickup_latitude || !ride.pickup_longitude || 
+                !ride.dropoff_latitude || !ride.dropoff_longitude) {
+                return;
+            }
+            
+            try {
+                const origin = {
+                    latitude: parseFloat(ride.pickup_latitude),
+                    longitude: parseFloat(ride.pickup_longitude),
+                };
+                const destination = {
+                    latitude: parseFloat(ride.dropoff_latitude),
+                    longitude: parseFloat(ride.dropoff_longitude),
+                };
+                
+                const routeKey = `${ride.rideType}-${ride.id}`;
+                const response = await routesAPI.calculateRoute(origin, destination);
+                
+                if (response.data.success && response.data.data.route) {
+                    const route = response.data.data.route;
+                    if (route.polyline) {
+                        routes[routeKey] = {
+                            polyline: route.polyline,
+                            coordinates: decodePolyline(route.polyline),
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error(`Error fetching route for ride ${ride.id}:`, error);
+            }
+        });
+        
+        // Fetch routes for accepted and pending requests
+        const requestRoutePromises = [];
+        
+        ridesList.forEach((ride) => {
+            if (ride.rideType === 'offered' && ride.accepted_requests) {
+                ride.accepted_requests.forEach((request) => {
+                    if (request.pickup_latitude && request.pickup_longitude && 
+                        request.dropoff_latitude && request.dropoff_longitude) {
+                        const promise = (async () => {
+                            try {
+                                const origin = {
+                                    latitude: parseFloat(request.pickup_latitude),
+                                    longitude: parseFloat(request.pickup_longitude),
+                                };
+                                const destination = {
+                                    latitude: parseFloat(request.dropoff_latitude),
+                                    longitude: parseFloat(request.dropoff_longitude),
+                                };
+                                
+                                const routeKey = `${ride.id}-${request.id}-accepted`;
+                                const response = await routesAPI.calculateRoute(origin, destination);
+                                
+                                if (response.data.success && response.data.data.route) {
+                                    const route = response.data.data.route;
+                                    if (route.polyline) {
+                                        reqRoutes[routeKey] = {
+                                            polyline: route.polyline,
+                                            coordinates: decodePolyline(route.polyline),
+                                        };
+                                    }
+                                }
+                            } catch (error) {
+                                console.error(`Error fetching route for accepted request ${request.id}:`, error);
+                            }
+                        })();
+                        requestRoutePromises.push(promise);
+                    }
+                });
+            }
+            
+            if (ride.rideType === 'offered' && ride.pending_requests) {
+                ride.pending_requests.forEach((request) => {
+                    if (request.pickup_latitude && request.pickup_longitude && 
+                        request.dropoff_latitude && request.dropoff_longitude) {
+                        const promise = (async () => {
+                            try {
+                                const origin = {
+                                    latitude: parseFloat(request.pickup_latitude),
+                                    longitude: parseFloat(request.pickup_longitude),
+                                };
+                                const destination = {
+                                    latitude: parseFloat(request.dropoff_latitude),
+                                    longitude: parseFloat(request.dropoff_longitude),
+                                };
+                                
+                                const routeKey = `${ride.id}-${request.id}-pending`;
+                                const response = await routesAPI.calculateRoute(origin, destination);
+                                
+                                if (response.data.success && response.data.data.route) {
+                                    const route = response.data.data.route;
+                                    if (route.polyline) {
+                                        reqRoutes[routeKey] = {
+                                            polyline: route.polyline,
+                                            coordinates: decodePolyline(route.polyline),
+                                        };
+                                    }
+                                }
+                            } catch (error) {
+                                console.error(`Error fetching route for pending request ${request.id}:`, error);
+                            }
+                        })();
+                        requestRoutePromises.push(promise);
+                    }
+                });
+            }
+        });
+        
+        await Promise.all([...routePromises, ...requestRoutePromises]);
+        setRideRoutes(routes);
+        setRequestRoutes(reqRoutes);
     };
 
     /**
@@ -216,6 +348,7 @@ const MapScreen = () => {
             <Header title="Map" showBack={false} showStatusBar={true} />
             <MapView
                 ref={mapRef}
+                provider={Platform.OS === 'ios' ? PROVIDER_GOOGLE : undefined}
                 style={styles.map}
                 region={mapRegion}
                 onRegionChangeComplete={setRegion}
@@ -228,11 +361,18 @@ const MapScreen = () => {
                     }
                 }}
                 initialRegion={mapRegion}
+                mapType="standard"
+                loadingEnabled={true}
+                loadingIndicatorColor={Colors.primary}
+                loadingBackgroundColor={Colors.background}
             >
                 {/* User location marker */}
-                {location && (
+                {location && location.latitude && location.longitude && (
                     <Marker
-                        coordinate={location}
+                        coordinate={{
+                            latitude: Number(parseFloat(location.latitude) || 0),
+                            longitude: Number(parseFloat(location.longitude) || 0),
+                        }}
                         title="Your Location"
                         pinColor={Colors.primary}
                     />
@@ -245,17 +385,31 @@ const MapScreen = () => {
                         ? rides.filter(r => r && r.id && selectedRide && selectedRide.id && r.id === selectedRide.id && r.rideType === selectedRide.rideType)
                         : rides;
                     
-                    return ridesToShow
+                    const markers = [];
+                    
+                    ridesToShow
                         .filter(ride => ride && ride.pickup_latitude && ride.pickup_longitude && ride.dropoff_latitude && ride.dropoff_longitude)
-                        .map((ride) => {
+                        .forEach((ride) => {
+                        
+                        // Parse coordinates as floats and validate
+                        const pickupLat = parseFloat(ride.pickup_latitude);
+                        const pickupLng = parseFloat(ride.pickup_longitude);
+                        const dropoffLat = parseFloat(ride.dropoff_latitude);
+                        const dropoffLng = parseFloat(ride.dropoff_longitude);
+                        
+                        // Skip if coordinates are invalid
+                        if (isNaN(pickupLat) || isNaN(pickupLng) || isNaN(dropoffLat) || isNaN(dropoffLng)) {
+                            console.warn('Invalid coordinates for ride:', ride.id);
+                            return;
+                        }
                         
                         const pickupCoord = {
-                            latitude: ride.pickup_latitude,
-                            longitude: ride.pickup_longitude,
+                            latitude: pickupLat,
+                            longitude: pickupLng,
                         };
                         const dropoffCoord = {
-                            latitude: ride.dropoff_latitude,
-                            longitude: ride.dropoff_longitude,
+                            latitude: dropoffLat,
+                            longitude: dropoffLng,
                         };
 
                         // Different colors for offered vs requested rides
@@ -274,28 +428,168 @@ const MapScreen = () => {
                             : (isOffered ? Colors.primary : Colors.secondary);
                         const routeWidth = isSelected ? MAP_CONFIG.ROUTE_WIDTH * 2 : MAP_CONFIG.ROUTE_WIDTH;
 
-                        return (
-                            <React.Fragment key={`${ride.rideType}-${ride.id}`}>
-                                <Marker
-                                    coordinate={pickupCoord}
-                                    pinColor={pickupColor}
-                                    onPress={() => handleRidePress(ride)}
-                                />
-                                <Marker
-                                    coordinate={dropoffCoord}
-                                    pinColor={dropoffColor}
-                                    onPress={() => handleRidePress(ride)}
-                                />
-                                <Polyline
-                                    coordinates={[pickupCoord, dropoffCoord]}
-                                    strokeColor={routeColor}
-                                    strokeWidth={routeWidth}
-                                    tappable={true}
-                                    onPress={() => handleRidePress(ride)}
-                                />
-                            </React.Fragment>
+                        // Add ride markers - ensure coordinates are numbers for iOS
+                        const safePickupCoord = {
+                            latitude: Number(pickupCoord.latitude),
+                            longitude: Number(pickupCoord.longitude),
+                        };
+                        const safeDropoffCoord = {
+                            latitude: Number(dropoffCoord.latitude),
+                            longitude: Number(dropoffCoord.longitude),
+                        };
+                        
+                        // Get actual route if available, otherwise use straight line
+                        const routeKey = `${ride.rideType}-${ride.id}`;
+                        const routeData = rideRoutes[routeKey];
+                        const routeCoordinates = routeData?.coordinates || [safePickupCoord, safeDropoffCoord];
+                        
+                        markers.push(
+                            <Marker
+                                key={`ride-${ride.rideType}-${ride.id}-pickup`}
+                                coordinate={safePickupCoord}
+                                pinColor={pickupColor}
+                                onPress={() => handleRidePress(ride)}
+                            />,
+                            <Marker
+                                key={`ride-${ride.rideType}-${ride.id}-dropoff`}
+                                coordinate={safeDropoffCoord}
+                                pinColor={dropoffColor}
+                                onPress={() => handleRidePress(ride)}
+                            />,
+                            <Polyline
+                                key={`ride-${ride.rideType}-${ride.id}-route`}
+                                coordinates={routeCoordinates.map(coord => ({
+                                    latitude: Number(coord.latitude),
+                                    longitude: Number(coord.longitude),
+                                }))}
+                                strokeColor={routeColor}
+                                strokeWidth={Number(routeWidth)}
+                                tappable={true}
+                                onPress={() => handleRidePress(ride)}
+                                lineDashPattern={routeData ? undefined : [5, 5]} // Dashed if no route data
+                            />
                         );
+                        
+                        // If this is an offered ride, show accepted and pending riders
+                        if (isOffered && ride.accepted_requests) {
+                            ride.accepted_requests.forEach((request, idx) => {
+                                if (request.pickup_latitude && request.pickup_longitude && 
+                                    request.dropoff_latitude && request.dropoff_longitude) {
+                                    const reqPickupLat = parseFloat(request.pickup_latitude);
+                                    const reqPickupLng = parseFloat(request.pickup_longitude);
+                                    const reqDropoffLat = parseFloat(request.dropoff_latitude);
+                                    const reqDropoffLng = parseFloat(request.dropoff_longitude);
+                                    
+                                    if (!isNaN(reqPickupLat) && !isNaN(reqPickupLng) && 
+                                        !isNaN(reqDropoffLat) && !isNaN(reqDropoffLng)) {
+                                        const safeReqPickup = {
+                                            latitude: Number(reqPickupLat),
+                                            longitude: Number(reqPickupLng),
+                                        };
+                                        const safeReqDropoff = {
+                                            latitude: Number(reqDropoffLat),
+                                            longitude: Number(reqDropoffLng),
+                                        };
+                                        
+                                        // Get actual route if available
+                                        const reqRouteKey = `${ride.id}-${request.id}-accepted`;
+                                        const reqRouteData = requestRoutes[reqRouteKey];
+                                        const reqRouteCoordinates = reqRouteData?.coordinates || [safeReqPickup, safeReqDropoff];
+                                        
+                                        markers.push(
+                                            <Marker
+                                                key={`accepted-${ride.id}-${request.id}-pickup`}
+                                                coordinate={safeReqPickup}
+                                                pinColor="#00AA44"
+                                                title={`${request.passenger_name || 'Passenger'} - Pickup`}
+                                                onPress={() => handleRidePress(ride)}
+                                            />,
+                                            <Marker
+                                                key={`accepted-${ride.id}-${request.id}-dropoff`}
+                                                coordinate={safeReqDropoff}
+                                                pinColor="#00CC66"
+                                                title={`${request.passenger_name || 'Passenger'} - Dropoff`}
+                                                onPress={() => handleRidePress(ride)}
+                                            />,
+                                            <Polyline
+                                                key={`accepted-${ride.id}-${request.id}-route`}
+                                                coordinates={reqRouteCoordinates.map(coord => ({
+                                                    latitude: Number(coord.latitude),
+                                                    longitude: Number(coord.longitude),
+                                                }))}
+                                                strokeColor="#00AA44"
+                                                strokeWidth={2}
+                                                lineDashPattern={reqRouteData ? undefined : [5, 5]}
+                                                tappable={true}
+                                                onPress={() => handleRidePress(ride)}
+                                            />
+                                        );
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // Show pending requests for offered rides
+                        if (isOffered && ride.pending_requests) {
+                            ride.pending_requests.forEach((request, idx) => {
+                                if (request.pickup_latitude && request.pickup_longitude && 
+                                    request.dropoff_latitude && request.dropoff_longitude) {
+                                    const reqPickupLat = parseFloat(request.pickup_latitude);
+                                    const reqPickupLng = parseFloat(request.pickup_longitude);
+                                    const reqDropoffLat = parseFloat(request.dropoff_latitude);
+                                    const reqDropoffLng = parseFloat(request.dropoff_longitude);
+                                    
+                                    if (!isNaN(reqPickupLat) && !isNaN(reqPickupLng) && 
+                                        !isNaN(reqDropoffLat) && !isNaN(reqDropoffLng)) {
+                                        const safeReqPickup = {
+                                            latitude: Number(reqPickupLat),
+                                            longitude: Number(reqPickupLng),
+                                        };
+                                        const safeReqDropoff = {
+                                            latitude: Number(reqDropoffLat),
+                                            longitude: Number(reqDropoffLng),
+                                        };
+                                        
+                                        // Get actual route if available
+                                        const reqRouteKey = `${ride.id}-${request.id}-pending`;
+                                        const reqRouteData = requestRoutes[reqRouteKey];
+                                        const reqRouteCoordinates = reqRouteData?.coordinates || [safeReqPickup, safeReqDropoff];
+                                        
+                                        markers.push(
+                                            <Marker
+                                                key={`pending-${ride.id}-${request.id}-pickup`}
+                                                coordinate={safeReqPickup}
+                                                pinColor="#FFA500"
+                                                title={`${request.passenger_name || 'Passenger'} - Pickup (Pending)`}
+                                                onPress={() => handleRidePress(ride)}
+                                            />,
+                                            <Marker
+                                                key={`pending-${ride.id}-${request.id}-dropoff`}
+                                                coordinate={safeReqDropoff}
+                                                pinColor="#FF8C00"
+                                                title={`${request.passenger_name || 'Passenger'} - Dropoff (Pending)`}
+                                                onPress={() => handleRidePress(ride)}
+                                            />,
+                                            <Polyline
+                                                key={`pending-${ride.id}-${request.id}-route`}
+                                                coordinates={reqRouteCoordinates.map(coord => ({
+                                                    latitude: Number(coord.latitude),
+                                                    longitude: Number(coord.longitude),
+                                                }))}
+                                                strokeColor="#FFA500"
+                                                strokeWidth={2}
+                                                lineDashPattern={reqRouteData ? undefined : [3, 3]}
+                                                tappable={true}
+                                                onPress={() => handleRidePress(ride)}
+                                            />
+                                        );
+                                    }
+                                }
+                            });
+                        }
                     });
+                    
+                    return markers;
                 })()}
             </MapView>
 

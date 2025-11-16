@@ -230,7 +230,7 @@ const MyRidesScreen = () => {
         } catch (error) {
             console.error("Accept request error:", error);
             console.error("Error response:", error.response?.data);
-            console.error("Request ID sent:", requestIdNum);
+            //console.error("Request ID sent:", requestIdNum);
             console.error("Ride ID sent:", rideId);
             const errorMessage = error.response?.data?.message || 
                                 error.response?.data?.errors?.[0]?.msg || 
@@ -260,7 +260,7 @@ const MyRidesScreen = () => {
         } catch (error) {
             console.error("Reject request error:", error);
             console.error("Error response:", error.response?.data);
-            console.error("Request ID sent:", requestIdNum);
+           // console.error("Request ID sent:", requestIdNum);
             console.error("Ride ID sent:", rideId);
             const errorMessage = error.response?.data?.message || 
                                 error.response?.data?.errors?.[0]?.msg || 

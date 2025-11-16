@@ -981,8 +981,16 @@ const SearchRideScreen = () => {
                                                     text: "OK",
                                                     onPress: () => {
                                                         if (editingSearchId) {
-                                                            // Navigate back to saved searches after updating
-                                                            navigation.navigate("SavedSearches");
+                                                            // Navigate back to MyRides tab after updating
+                                                            // Get the root tab navigator and navigate to MyRides
+                                                            const tabNavigator = navigation.getParent()?.getParent();
+                                                            if (tabNavigator) {
+                                                                // Navigate to MyRides tab (this will close the modal)
+                                                                tabNavigator.navigate("MyRides");
+                                                            } else {
+                                                                // Fallback: go back and then navigate
+                                                                navigation.goBack();
+                                                            }
                                                         }
                                                     }
                                                 }

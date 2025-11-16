@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../constants/colors";
 import Header from "../../../components/common/Header";
 import Input from "../../../components/common/Input";
@@ -102,24 +103,68 @@ const EditProfileScreen = () => {
                     </Text>
 
                     <View style={styles.roleContainer}>
-                        <Button
-                            title="Passenger"
-                            variant={role === "passenger" ? "primary" : "outline"}
+                        <TouchableOpacity
+                            style={[
+                                styles.roleOption,
+                                role === "passenger" && styles.roleOptionSelected
+                            ]}
                             onPress={() => setRole("passenger")}
-                            style={styles.roleButton}
-                        />
-                        <Button
-                            title="Driver"
-                            variant={role === "driver" ? "primary" : "outline"}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons 
+                                name="person-outline" 
+                                size={24} 
+                                color={role === "passenger" ? Colors.textLight : Colors.primary} 
+                            />
+                            <Text style={[
+                                styles.roleOptionText,
+                                role === "passenger" && styles.roleOptionTextSelected
+                            ]}>
+                                Passenger
+                            </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                            style={[
+                                styles.roleOption,
+                                role === "driver" && styles.roleOptionSelected
+                            ]}
                             onPress={() => setRole("driver")}
-                            style={styles.roleButton}
-                        />
-                        <Button
-                            title="Both"
-                            variant={role === "both" ? "primary" : "outline"}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons 
+                                name="car-outline" 
+                                size={24} 
+                                color={role === "driver" ? Colors.textLight : Colors.primary} 
+                            />
+                            <Text style={[
+                                styles.roleOptionText,
+                                role === "driver" && styles.roleOptionTextSelected
+                            ]}>
+                                Driver
+                            </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                            style={[
+                                styles.roleOption,
+                                role === "both" && styles.roleOptionSelected
+                            ]}
                             onPress={() => setRole("both")}
-                            style={styles.roleButton}
-                        />
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons 
+                                name="people-outline" 
+                                size={24} 
+                                color={role === "both" ? Colors.textLight : Colors.primary} 
+                            />
+                            <Text style={[
+                                styles.roleOptionText,
+                                role === "both" && styles.roleOptionTextSelected
+                            ]}>
+                                Both
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 </Card>
 
@@ -164,10 +209,35 @@ const styles = StyleSheet.create({
     },
     roleContainer: {
         flexDirection: "row",
-        gap: 8,
+        gap: 12,
+        justifyContent: "space-between",
     },
-    roleButton: {
+    roleOption: {
         flex: 1,
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 16,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: Colors.border,
+        backgroundColor: Colors.backgroundLight,
+        minHeight: 100,
+    },
+    roleOptionSelected: {
+        backgroundColor: Colors.primary,
+        borderColor: Colors.primary,
+    },
+    roleOptionText: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: Colors.textPrimary,
+        marginTop: 8,
+        textAlign: "center",
+    },
+    roleOptionTextSelected: {
+        color: Colors.textLight,
     },
     saveButton: {
         marginTop: 8,

@@ -71,7 +71,7 @@ const EditProfileScreen = () => {
             style={styles.container}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-            <Header title="Edit Profile" showBack={true} />
+            <Header title="Edit Profile" showBack={true} showStatusBar={true} />
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.content}

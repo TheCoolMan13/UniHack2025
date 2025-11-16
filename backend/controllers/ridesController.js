@@ -1197,6 +1197,130 @@ const cancelRequest = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Cancel a pending ride request (Passenger)
+ * @route   POST /api/rides/requests/:requestId/cancel
+ * @access  Private
+ */
+const cancelMyRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.id;
+    
+    console.log('cancelMyRequest called with requestId:', requestId, 'userId:', userId);
+    
+    const requestIdInt = parseInt(requestId, 10);
+    if (isNaN(requestIdInt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Request ID must be a valid integer'
+      });
+    }
+
+    // Check if request exists and belongs to user
+    const [requests] = await db.execute(
+      'SELECT * FROM ride_requests WHERE id = ? AND passenger_id = ?',
+      [requestIdInt, userId]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ride request not found or you do not have permission'
+      });
+    }
+
+    const request = requests[0];
+
+    // Only allow cancelling pending requests
+    if (request.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Can only cancel pending ride requests'
+      });
+    }
+
+    // Update request status to cancelled
+    await db.execute(
+      'UPDATE ride_requests SET status = "cancelled" WHERE id = ?',
+      [requestIdInt]
+    );
+
+    res.json({
+      success: true,
+      message: 'Ride request cancelled successfully'
+    });
+  } catch (error) {
+    console.error('Cancel my request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error cancelling request'
+    });
+  }
+};
+
+/**
+ * @desc    Delete a cancelled/rejected ride request (Passenger)
+ * @route   DELETE /api/rides/requests/:requestId
+ * @access  Private
+ */
+const deleteMyRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user.id;
+    
+    console.log('deleteMyRequest called with requestId:', requestId, 'userId:', userId);
+    
+    const requestIdInt = parseInt(requestId, 10);
+    if (isNaN(requestIdInt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Request ID must be a valid integer'
+      });
+    }
+
+    // Check if request exists and belongs to user
+    const [requests] = await db.execute(
+      'SELECT * FROM ride_requests WHERE id = ? AND passenger_id = ?',
+      [requestIdInt, userId]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ride request not found or you do not have permission'
+      });
+    }
+
+    const request = requests[0];
+
+    // Only allow deleting cancelled or rejected requests
+    if (request.status !== 'cancelled' && request.status !== 'rejected') {
+      return res.status(400).json({
+        success: false,
+        message: 'Can only delete cancelled or rejected ride requests'
+      });
+    }
+
+    // Delete the request
+    await db.execute(
+      'DELETE FROM ride_requests WHERE id = ?',
+      [requestIdInt]
+    );
+
+    res.json({
+      success: true,
+      message: 'Ride request deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete my request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error deleting request'
+    });
+  }
+};
+
 module.exports = {
   createRide,
   getMyRides,
@@ -1208,6 +1332,8 @@ module.exports = {
   requestRide,
   acceptRequest,
   rejectRequest,
-  cancelRequest
+  cancelRequest,
+  cancelMyRequest,
+  deleteMyRequest
 };
 

@@ -54,6 +54,53 @@ router.get(
 router.get('/active', authenticate, ridesController.getActiveRides);
 
 /**
+ * @route   POST /api/rides/search
+ * @desc    Search for matching rides (Passenger)
+ * @access  Private
+ */
+router.post(
+  '/search',
+  authenticate,
+  [
+    body('pickup_latitude').toFloat().isFloat({ min: -90, max: 90 }).withMessage('Pickup latitude must be a valid number between -90 and 90'),
+    body('pickup_longitude').toFloat().isFloat({ min: -180, max: 180 }).withMessage('Pickup longitude must be a valid number between -180 and 180'),
+    body('dropoff_latitude').toFloat().isFloat({ min: -90, max: 90 }).withMessage('Dropoff latitude must be a valid number between -90 and 90'),
+    body('dropoff_longitude').toFloat().isFloat({ min: -180, max: 180 }).withMessage('Dropoff longitude must be a valid number between -180 and 180'),
+    body('schedule_days').isArray({ min: 1 }).withMessage('Schedule days must be a non-empty array'),
+    body('schedule_time').trim().notEmpty().withMessage('Schedule time is required')
+  ],
+  async (req, res, next) => {
+    try {
+      await ridesController.searchRides(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   POST /api/rides/requests/:requestId/cancel
+ * @desc    Cancel a pending ride request (Passenger)
+ * @access  Private
+ */
+router.post(
+  '/requests/:requestId/cancel',
+  authenticate,
+  ridesController.cancelMyRequest
+);
+
+/**
+ * @route   DELETE /api/rides/requests/:requestId
+ * @desc    Delete a cancelled/rejected ride request (Passenger)
+ * @access  Private
+ */
+router.delete(
+  '/requests/:requestId',
+  authenticate,
+  ridesController.deleteMyRequest
+);
+
+/**
  * @route   GET /api/rides/:id
  * @desc    Get ride details
  * @access  Private
@@ -78,31 +125,6 @@ router.put(
  * @access  Private (Driver)
  */
 router.delete('/:id', authenticate, authorize('driver', 'both'), ridesController.deleteRide);
-
-/**
- * @route   POST /api/rides/search
- * @desc    Search for matching rides (Passenger)
- * @access  Private
- */
-router.post(
-  '/search',
-  authenticate,
-  [
-    body('pickup_latitude').toFloat().isFloat({ min: -90, max: 90 }).withMessage('Pickup latitude must be a valid number between -90 and 90'),
-    body('pickup_longitude').toFloat().isFloat({ min: -180, max: 180 }).withMessage('Pickup longitude must be a valid number between -180 and 180'),
-    body('dropoff_latitude').toFloat().isFloat({ min: -90, max: 90 }).withMessage('Dropoff latitude must be a valid number between -90 and 90'),
-    body('dropoff_longitude').toFloat().isFloat({ min: -180, max: 180 }).withMessage('Dropoff longitude must be a valid number between -180 and 180'),
-    body('schedule_days').isArray({ min: 1 }).withMessage('Schedule days must be a non-empty array'),
-    body('schedule_time').trim().notEmpty().withMessage('Schedule time is required')
-  ],
-  async (req, res, next) => {
-    try {
-      await ridesController.searchRides(req, res);
-    } catch (error) {
-      next(error);
-    }
-  }
-);
 
 /**
  * @route   POST /api/rides/:id/request

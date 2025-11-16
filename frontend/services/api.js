@@ -84,6 +84,10 @@ export const ridesAPI = {
     acceptRequest: (rideId, requestId) => api.post(`/rides/${rideId}/accept`, { request_id: requestId }),
     rejectRequest: (rideId, requestId) => api.post(`/rides/${rideId}/reject`, { request_id: requestId }),
     cancelRequest: (rideId, requestId) => api.post(`/rides/${rideId}/cancel`, { request_id: requestId }),
+    
+    // Passenger endpoints for managing their own requests
+    cancelMyRequest: (requestId) => api.post(`/rides/requests/${requestId}/cancel`),
+    deleteMyRequest: (requestId) => api.delete(`/rides/requests/${requestId}`),
 };
 
 /**

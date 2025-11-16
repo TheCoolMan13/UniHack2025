@@ -340,6 +340,72 @@ const MyRidesScreen = () => {
         );
     };
 
+    const handleCancelMyRequest = async (requestId) => {
+        Alert.alert(
+            "Cancel Request",
+            "Are you sure you want to cancel this ride request?",
+            [
+                { text: "No", style: "cancel" },
+                {
+                    text: "Yes, Cancel",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const response = await ridesAPI.cancelMyRequest(requestId);
+                            if (response.data.success) {
+                                Alert.alert("Success", "Ride request cancelled");
+                                fetchAllRides(); // Refresh list
+                            } else {
+                                Alert.alert("Error", response.data.message || "Failed to cancel request");
+                            }
+                        } catch (error) {
+                            console.error("Cancel my request error:", error);
+                            const errorMessage = error.response?.data?.message || 
+                                                error.response?.data?.errors?.[0]?.msg || 
+                                                error.response?.data?.errors?.[0]?.message ||
+                                                error.message || 
+                                                "Failed to cancel request";
+                            Alert.alert("Error", errorMessage);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleDeleteMyRequest = async (requestId) => {
+        Alert.alert(
+            "Delete Request",
+            "Are you sure you want to delete this ride request?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const response = await ridesAPI.deleteMyRequest(requestId);
+                            if (response.data.success) {
+                                Alert.alert("Success", "Ride request deleted");
+                                fetchAllRides(); // Refresh list
+                            } else {
+                                Alert.alert("Error", response.data.message || "Failed to delete request");
+                            }
+                        } catch (error) {
+                            console.error("Delete my request error:", error);
+                            const errorMessage = error.response?.data?.message || 
+                                                error.response?.data?.errors?.[0]?.msg || 
+                                                error.response?.data?.errors?.[0]?.message ||
+                                                error.message || 
+                                                "Failed to delete request";
+                            Alert.alert("Error", errorMessage);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleShowMap = async (ride, request) => {
         try {
             setSelectedRequest(request);
@@ -917,6 +983,29 @@ const MyRidesScreen = () => {
                                         <Text style={styles.deleteButtonText}>Delete</Text>
                                     </TouchableOpacity>
                                 )}
+                                {/* Action buttons for requested rides */}
+                                {activeTab === "requested" && (
+                                    <View style={styles.requestedRideActions}>
+                                        {ride.status === 'pending' && (
+                                            <TouchableOpacity 
+                                                style={[styles.actionButtonSmall, styles.cancelButtonSmall]}
+                                                onPress={() => handleCancelMyRequest(ride.request_id)}
+                                            >
+                                                <Ionicons name="close-circle-outline" size={18} color={Colors.error} />
+                                                <Text style={[styles.actionButtonTextSmall, { color: Colors.error }]}>Cancel</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                        {(ride.status === 'cancelled' || ride.status === 'rejected') && (
+                                            <TouchableOpacity 
+                                                style={[styles.actionButtonSmall, styles.deleteButtonSmall]}
+                                                onPress={() => handleDeleteMyRequest(ride.request_id)}
+                                            >
+                                                <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                                                <Text style={[styles.actionButtonTextSmall, { color: Colors.error }]}>Delete</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                )}
                             </View>
                         </Card>
                     ))
@@ -1368,6 +1457,32 @@ const styles = StyleSheet.create({
         paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: Colors.border,
+    },
+    requestedRideActions: {
+        flexDirection: "row",
+        gap: 8,
+    },
+    actionButtonSmall: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        gap: 6,
+    },
+    cancelButtonSmall: {
+        backgroundColor: Colors.error + "15",
+        borderWidth: 1,
+        borderColor: Colors.error + "40",
+    },
+    deleteButtonSmall: {
+        backgroundColor: Colors.error + "15",
+        borderWidth: 1,
+        borderColor: Colors.error + "40",
+    },
+    actionButtonTextSmall: {
+        fontSize: 13,
+        fontWeight: "600",
     },
     price: {
         fontSize: 18,

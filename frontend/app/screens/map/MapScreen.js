@@ -56,9 +56,10 @@ const MapScreen = () => {
             try {
                 const driverResponse = await ridesAPI.getMyRides('driver');
                 if (driverResponse.data.success) {
-                    const driverRides = (driverResponse.data.data.rides || []).map(ride => ({
+                    const driverRides = (driverResponse.data.data.rides || []).map((ride, index) => ({
                         ...ride,
                         rideType: 'offered', // User offered this ride as driver
+                        uniqueId: `offered-${ride.id}-${index}`, // Unique identifier to prevent key conflicts
                         // Include accepted_requests and pending_requests from API response
                         accepted_requests: ride.accepted_requests || [],
                         pending_requests: ride.pending_requests || [],
@@ -73,9 +74,10 @@ const MapScreen = () => {
             try {
                 const passengerResponse = await ridesAPI.getMyRides('passenger');
                 if (passengerResponse.data.success) {
-                    const passengerRides = (passengerResponse.data.data.rides || []).map(ride => ({
+                    const passengerRides = (passengerResponse.data.data.rides || []).map((ride, index) => ({
                         ...ride,
                         rideType: 'requested', // User requested this ride as passenger
+                        uniqueId: `requested-${ride.id}-${index}`, // Unique identifier to prevent key conflicts
                     }));
                     allRides.push(...passengerRides);
                 }
@@ -119,7 +121,7 @@ const MapScreen = () => {
                     longitude: parseFloat(ride.dropoff_longitude),
                 };
                 
-                const routeKey = `${ride.rideType}-${ride.id}`;
+                const routeKey = ride.uniqueId || `${ride.rideType}-${ride.id}`;
                 const response = await routesAPI.calculateRoute(origin, destination);
                 
                 if (response.data.success && response.data.data.route) {
@@ -451,7 +453,7 @@ const MapScreen = () => {
                         };
                         
                         // Get actual route if available, otherwise use straight line
-                        const routeKey = `${ride.rideType}-${ride.id}`;
+                        const routeKey = ride.uniqueId || `${ride.rideType}-${ride.id}`;
                         const routeData = rideRoutes[routeKey];
                         let routeCoordinates = routeData?.coordinates || [safePickupCoord, safeDropoffCoord];
                         
@@ -479,21 +481,24 @@ const MapScreen = () => {
                             routeCoordinates = [safePickupCoord, safeDropoffCoord];
                         }
                         
+                        // Use uniqueId if available, otherwise fall back to rideType-id combination
+                        const uniqueKey = ride.uniqueId || `${ride.rideType}-${ride.id}`;
+                        
                         markers.push(
                             <Marker
-                                key={`ride-${ride.rideType}-${ride.id}-pickup`}
+                                key={`ride-${uniqueKey}-pickup`}
                                 coordinate={safePickupCoord}
                                 pinColor={pickupColor}
                                 onPress={() => handleRidePress(ride)}
                             />,
                             <Marker
-                                key={`ride-${ride.rideType}-${ride.id}-dropoff`}
+                                key={`ride-${uniqueKey}-dropoff`}
                                 coordinate={safeDropoffCoord}
                                 pinColor={dropoffColor}
                                 onPress={() => handleRidePress(ride)}
                             />,
                             <Polyline
-                                key={`ride-${ride.rideType}-${ride.id}-route`}
+                                key={`ride-${uniqueKey}-route`}
                                 coordinates={routeCoordinates}
                                 strokeColor={routeColor}
                                 strokeWidth={Number(routeWidth)}

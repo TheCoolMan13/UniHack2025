@@ -73,9 +73,9 @@ const createRide = async (req, res, next) => {
 
     // Get created ride with driver info
     const [rides] = await db.execute(
-      `SELECT r.*, u.name as driver_name, u.rating as driver_rating 
-       FROM rides r 
-       JOIN users u ON r.driver_id = u.id 
+      `SELECT r.*, u.name as driver_name, u.rating as driver_rating, u.avatar_url as driver_avatar_url
+       FROM rides r
+       JOIN users u ON r.driver_id = u.id
        WHERE r.id = ?`,
       [result.insertId]
     );
@@ -266,7 +266,7 @@ const getRideDetails = async (req, res) => {
     const { id } = req.params;
 
     const [rides] = await db.execute(
-      `SELECT r.*, u.name as driver_name, u.rating as driver_rating, u.phone as driver_phone
+      `SELECT r.*, u.name as driver_name, u.rating as driver_rating, u.phone as driver_phone, u.avatar_url as driver_avatar_url
        FROM rides r
        JOIN users u ON r.driver_id = u.id
        WHERE r.id = ?`,
@@ -301,7 +301,8 @@ const getRideDetails = async (req, res) => {
          u.name as passenger_name, 
          u.rating as passenger_rating,
          u.phone as passenger_phone,
-         u.email as passenger_email
+         u.email as passenger_email,
+         u.avatar_url as passenger_avatar_url
          FROM ride_requests rr
          JOIN users u ON rr.passenger_id = u.id
          WHERE rr.ride_id = ?
@@ -435,9 +436,9 @@ const updateRide = async (req, res) => {
 
     // Get updated ride
     const [rides] = await db.execute(
-      `SELECT r.*, u.name as driver_name, u.rating as driver_rating 
-       FROM rides r 
-       JOIN users u ON r.driver_id = u.id 
+      `SELECT r.*, u.name as driver_name, u.rating as driver_rating, u.avatar_url as driver_avatar_url
+       FROM rides r
+       JOIN users u ON r.driver_id = u.id
        WHERE r.id = ?`,
       [id]
     );
@@ -506,7 +507,7 @@ const getActiveRides = async (req, res) => {
   try {
     // Get all active rides
     const [allRides] = await db.execute(
-      `SELECT r.*, u.name as driver_name, u.rating as driver_rating
+      `SELECT r.*, u.name as driver_name, u.rating as driver_rating, u.avatar_url as driver_avatar_url
        FROM rides r
        JOIN users u ON r.driver_id = u.id
        WHERE r.status = 'active' AND r.available_seats > 0
@@ -580,7 +581,7 @@ const searchRides = async (req, res, next) => {
     let allRides;
     try {
       [allRides] = await db.execute(
-        `SELECT r.*, u.name as driver_name, u.rating as driver_rating
+        `SELECT r.*, u.name as driver_name, u.rating as driver_rating, u.avatar_url as driver_avatar_url
          FROM rides r
          JOIN users u ON r.driver_id = u.id
          WHERE r.status = 'active' AND r.available_seats > 0`

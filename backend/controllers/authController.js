@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const db = require('../config/database');
+const { getProfilePictureUrl } = require('../utils/profilePicture');
 
 const generateToken = (userId) => {
   return jwt.sign(
@@ -47,11 +48,20 @@ const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Insert user
+    // Insert user (we'll update avatar_url after getting the ID)
     const [result] = await db.execute(
       `INSERT INTO users (email, password_hash, name, phone, role) 
        VALUES (?, ?, ?, ?, ?)`,
       [email, passwordHash, name, phone || null, role || 'passenger']
+    );
+
+    // Generate profile picture URL based on user ID
+    const avatarUrl = getProfilePictureUrl(result.insertId);
+    
+    // Update user with avatar URL
+    await db.execute(
+      'UPDATE users SET avatar_url = ? WHERE id = ?',
+      [avatarUrl, result.insertId]
     );
 
     // Get created user (without password)

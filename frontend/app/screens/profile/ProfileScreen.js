@@ -1,11 +1,12 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../../context/AuthContext";
 import { Colors } from "../../../constants/colors";
 import Header from "../../../components/common/Header";
 import Card from "../../../components/common/Card";
 import Button from "../../../components/common/Button";
+import { getProfilePictureUrl } from "../../../utils/profilePicture";
 
 /**
  * Profile Screen
@@ -15,6 +16,12 @@ import Button from "../../../components/common/Button";
 const ProfileScreen = () => {
     const navigation = useNavigation();
     const { user, logout } = useAuth();
+    const [imageError, setImageError] = React.useState(false);
+
+    // Reset image error when user changes
+    React.useEffect(() => {
+        setImageError(false);
+    }, [user?.id]);
 
     const handleLogout = () => {
         Alert.alert(
@@ -38,11 +45,22 @@ const ProfileScreen = () => {
                 {/* Profile Header */}
             <Card style={styles.profileCard}>
                 <View style={styles.avatarContainer}>
-                    <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>
-                            {user?.name?.charAt(0).toUpperCase() || "U"}
-                        </Text>
-                    </View>
+                    {user?.id && !imageError ? (
+                        <Image 
+                            source={{ uri: user.avatar_url || getProfilePictureUrl(user.id) }} 
+                            style={styles.avatarImage}
+                            onError={() => {
+                                // If image fails to load, show fallback
+                                setImageError(true);
+                            }}
+                        />
+                    ) : (
+                        <View style={styles.avatar}>
+                            <Text style={styles.avatarText}>
+                                {user?.name?.charAt(0).toUpperCase() || "U"}
+                            </Text>
+                        </View>
+                    )}
                 </View>
                 <Text style={styles.name}>{user?.name || "User"}</Text>
                 {user?.email ? (
@@ -157,6 +175,12 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primary,
         justifyContent: "center",
         alignItems: "center",
+    },
+    avatarImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: Colors.border,
     },
     avatarText: {
         fontSize: 32,

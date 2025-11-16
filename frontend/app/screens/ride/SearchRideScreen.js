@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, Dimensions, Image } from "react-native";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { Colors } from "../../../constants/colors";
@@ -13,6 +13,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { getLocationSelectionResult } from "../map/LocationSelectionScreen";
 import { decodePolyline } from "../../../utils/polyline";
 import { MAP_CONFIG } from "../../../constants/config";
+import { getProfilePictureUrl } from "../../../utils/profilePicture";
 
 /**
  * Search Ride Screen
@@ -714,8 +715,29 @@ const SearchRideScreen = () => {
                                     style={styles.resultCard}
                                 >
                                     <View style={styles.resultHeader}>
-                                        <Text style={styles.driverName}>{request.driver_name || "Driver"}</Text>
-                                        <Text style={styles.rating}>⭐ {request.driver_rating || "0.0"}</Text>
+                                        <View style={styles.driverInfo}>
+                                            {request.driver_avatar_url ? (
+                                                <Image 
+                                                    source={{ uri: request.driver_avatar_url }} 
+                                                    style={styles.driverAvatar}
+                                                />
+                                            ) : request.driver_id ? (
+                                                <Image 
+                                                    source={{ uri: getProfilePictureUrl(request.driver_id) }} 
+                                                    style={styles.driverAvatar}
+                                                />
+                                            ) : (
+                                                <View style={[styles.driverAvatar, styles.driverAvatarPlaceholder]}>
+                                                    <Text style={styles.driverAvatarText}>
+                                                        {(request.driver_name || "D").charAt(0).toUpperCase()}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            <View style={styles.driverNameContainer}>
+                                                <Text style={styles.driverName}>{request.driver_name || "Driver"}</Text>
+                                                <Text style={styles.rating}>⭐ {request.driver_rating || "0.0"}</Text>
+                                            </View>
+                                        </View>
                                     </View>
                                     
                                     {request.matchScore && (
@@ -794,8 +816,29 @@ const SearchRideScreen = () => {
                                         activeOpacity={0.7}
                                     >
                                         <View style={styles.resultHeader}>
-                                            <Text style={styles.driverName}>{ride.driver_name || "Driver"}</Text>
-                                            <Text style={styles.rating}>⭐ {ride.driver_rating || "0.0"}</Text>
+                                            <View style={styles.driverInfo}>
+                                                {ride.driver_avatar_url ? (
+                                                    <Image 
+                                                        source={{ uri: ride.driver_avatar_url }} 
+                                                        style={styles.driverAvatar}
+                                                    />
+                                                ) : ride.driver_id ? (
+                                                    <Image 
+                                                        source={{ uri: getProfilePictureUrl(ride.driver_id) }} 
+                                                        style={styles.driverAvatar}
+                                                    />
+                                                ) : (
+                                                    <View style={[styles.driverAvatar, styles.driverAvatarPlaceholder]}>
+                                                        <Text style={styles.driverAvatarText}>
+                                                            {(ride.driver_name || "D").charAt(0).toUpperCase()}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                <View style={styles.driverNameContainer}>
+                                                    <Text style={styles.driverName}>{ride.driver_name || "Driver"}</Text>
+                                                    <Text style={styles.rating}>⭐ {ride.driver_rating || "0.0"}</Text>
+                                                </View>
+                                            </View>
                                         </View>
                                         
                                         {/* Match Score */}
@@ -1088,10 +1131,36 @@ const styles = StyleSheet.create({
         alignItems: "center",
         marginBottom: 8,
     },
+    driverInfo: {
+        flexDirection: "row",
+        alignItems: "center",
+        flex: 1,
+    },
+    driverAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+        backgroundColor: Colors.border,
+    },
+    driverAvatarPlaceholder: {
+        backgroundColor: Colors.primary,
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    driverAvatarText: {
+        fontSize: 18,
+        fontWeight: "bold",
+        color: Colors.textLight,
+    },
+    driverNameContainer: {
+        flex: 1,
+    },
     driverName: {
         fontSize: 18,
         fontWeight: "bold",
         color: Colors.textPrimary,
+        marginBottom: 2,
     },
     rating: {
         fontSize: 14,

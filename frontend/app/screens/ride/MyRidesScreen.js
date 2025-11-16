@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Linking, Modal, Dimensions, Platform, Image } from "react-native";
 import { useSafeAreaInsets, useSafeAreaFrame } from "react-native-safe-area-context";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,6 +12,7 @@ import Button from "../../../components/common/Button";
 import { ridesAPI, routesAPI, riderSearchesAPI } from "../../../services/api";
 import { decodePolyline } from "../../../utils/polyline";
 import { MAP_CONFIG } from "../../../constants/config";
+import { getProfilePictureUrl } from "../../../utils/profilePicture";
 
 /**
  * My Rides Screen
@@ -707,9 +708,22 @@ const MyRidesScreen = () => {
                             {activeTab === "requested" && (
                                 <View style={styles.rideInfo}>
                                     <Text style={styles.infoLabel}>Driver:</Text>
-                                    <Text style={styles.infoValue}>
-                                        {ride.driver} {ride.driver_rating > 0 && `⭐ ${ride.driver_rating}`}
-                                    </Text>
+                                    <View style={styles.userInfoRow}>
+                                        {ride.driver_avatar_url ? (
+                                            <Image 
+                                                source={{ uri: ride.driver_avatar_url }} 
+                                                style={styles.userAvatar}
+                                            />
+                                        ) : ride.driver_id ? (
+                                            <Image 
+                                                source={{ uri: getProfilePictureUrl(ride.driver_id) }} 
+                                                style={styles.userAvatar}
+                                            />
+                                        ) : null}
+                                        <Text style={styles.infoValue}>
+                                            {ride.driver} {ride.driver_rating > 0 && `⭐ ${ride.driver_rating}`}
+                                        </Text>
+                                    </View>
                                 </View>
                             )}
 
@@ -730,7 +744,18 @@ const MyRidesScreen = () => {
                                     {ride.pending_requests.map((request, idx) => (
                                         <View key={request.id || idx} style={styles.requestItem}>
                                             <View style={styles.requestHeader}>
-                                                <View>
+                                                {request.passenger_avatar_url ? (
+                                                    <Image 
+                                                        source={{ uri: request.passenger_avatar_url }} 
+                                                        style={styles.userAvatar}
+                                                    />
+                                                ) : request.passenger_id ? (
+                                                    <Image 
+                                                        source={{ uri: getProfilePictureUrl(request.passenger_id) }} 
+                                                        style={styles.userAvatar}
+                                                    />
+                                                ) : null}
+                                                <View style={styles.requestInfo}>
                                                     <Text style={styles.requestName}>
                                                         {request.passenger_name || 'Passenger'}
                                                     </Text>
@@ -812,7 +837,18 @@ const MyRidesScreen = () => {
                                     {ride.accepted_requests.map((request, idx) => (
                                         <View key={request.id || idx} style={[styles.requestItem, styles.acceptedRequestItem]}>
                                             <View style={styles.requestHeader}>
-                                                <View>
+                                                {request.passenger_avatar_url ? (
+                                                    <Image 
+                                                        source={{ uri: request.passenger_avatar_url }} 
+                                                        style={styles.userAvatar}
+                                                    />
+                                                ) : request.passenger_id ? (
+                                                    <Image 
+                                                        source={{ uri: getProfilePictureUrl(request.passenger_id) }} 
+                                                        style={styles.userAvatar}
+                                                    />
+                                                ) : null}
+                                                <View style={styles.requestInfo}>
                                                     <Text style={styles.requestName}>
                                                         {request.passenger_name || 'Passenger'}
                                                     </Text>
@@ -1395,6 +1431,21 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         alignItems: "center",
         marginBottom: 12,
+    },
+    requestInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
+    userInfoRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    userAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: Colors.border,
     },
     requestName: {
         fontSize: 16,

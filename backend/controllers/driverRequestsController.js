@@ -56,7 +56,7 @@ const createDriverRequest = async (req, res, next) => {
 
     // Get created request with driver info
     const [requests] = await db.execute(
-      `SELECT dr.*, u.name as driver_name, u.rating as driver_rating
+      `SELECT dr.*, u.name as driver_name, u.rating as driver_rating, u.avatar_url as driver_avatar_url
        FROM driver_requests dr
        JOIN users u ON dr.driver_id = u.id
        WHERE dr.id = ?`,
@@ -154,7 +154,7 @@ const searchDriverRequests = async (req, res, next) => {
 
     // Get all active driver requests
     const [allRequests] = await db.execute(
-      `SELECT dr.*, u.name as driver_name, u.rating as driver_rating
+      `SELECT dr.*, u.name as driver_name, u.rating as driver_rating, u.avatar_url as driver_avatar_url
        FROM driver_requests dr
        JOIN users u ON dr.driver_id = u.id
        WHERE dr.status = 'active'`,
@@ -184,6 +184,7 @@ const searchDriverRequests = async (req, res, next) => {
 
     const driverRoutes = allRequests.map(req => ({
       id: req.id,
+      driver_id: req.driver_id,
       pickupLocation: {
         latitude: parseFloat(req.pickup_latitude),
         longitude: parseFloat(req.pickup_longitude)
@@ -197,7 +198,8 @@ const searchDriverRequests = async (req, res, next) => {
       availableSeats: req.available_seats,
       price: req.price,
       driver_name: req.driver_name,
-      driver_rating: req.driver_rating
+      driver_rating: req.driver_rating,
+      driver_avatar_url: req.driver_avatar_url
     }));
 
     const matches = await findMatchingRides(passengerRoute, driverRoutes);
